@@ -13,12 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #include "flatbuffers/flatbuffers.h"
 #include "flatbuffers/idl.h"
 #include "flatbuffers/minireflect.h"
 #include "flatbuffers/registry.h"
 #include "flatbuffers/util.h"
+#include "base64fbs/util_base64.h"
 
 // clang-format off
 #ifdef FLATBUFFERS_CPP98_STL
@@ -1999,6 +1999,8 @@ int main(int /*argc*/, const char * /*argv*/ []) {
   JsonDefaultTest();
 
   FlexBuffersTest();
+
+  TEST_EQ(base64fbs::JsonBase64Test(), 0);
 
   if (!testing_fails) {
     TEST_OUTPUT_LINE("ALL TESTS PASSED");

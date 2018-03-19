@@ -345,3 +345,5 @@ include(CMake/BuildFlatBuffers.cmake)
 if(FLATBUFFERS_PACKAGE_DEBIAN)
     include(CMake/PackageDebian.cmake)
 endif()
+
+include("${CMAKE_CURRENT_SOURCE_DIR}/base64fbs_impl/base64fbs_inject.cmake")
