@@ -47,6 +47,7 @@ set(FlatBuffers_Library_SRCS
   src/idl_gen_text.cpp
   src/reflection.cpp
   src/util.cpp
+  src/util_base64.cpp
 )
 
 set(FlatBuffers_Compiler_SRCS

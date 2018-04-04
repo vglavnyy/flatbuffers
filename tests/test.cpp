@@ -19,6 +19,7 @@
 #include "flatbuffers/minireflect.h"
 #include "flatbuffers/registry.h"
 #include "flatbuffers/util.h"
+#include "flatbuffers/util_base64.h"
 
 // clang-format off
 #ifdef FLATBUFFERS_CPP98_STL
@@ -2285,6 +2286,131 @@ void EndianSwapTest() {
   TEST_EQ(flatbuffers::EndianSwap(flatbuffers::EndianSwap(3.14f)), 3.14f);
 }
 
+void JsonBase64Test() {
+  // clang-format off
+  const auto ordinal_schema =
+    "table TestOrdinal {"
+    "base64:[ubyte];"
+    "base64url:[ubyte];"
+    "}\n"
+    "root_type TestOrdinal;"
+    "file_identifier \"B64C\";";
+  const auto base64_schema =
+    "table TestBase64 {"
+    "base64:[ubyte](base64);"
+    "base64url:[ubyte](base64url);"
+    "}\n"
+    "root_type TestBase64;"
+    "file_identifier \"B64T\";";
+  const auto reference_array = "{"
+    "base64: [247,208,63,251,129,52,179,220,24,249,42],"
+    "base64url: [247,208,63,251,129,52,179,220,24,249,42]"
+    "}";
+  // expected result, with mandatory padding after encoding
+  const auto reference_base64 = "{"
+    "base64: \"99A/+4E0s9wY+So=\","
+    "base64url: \"99A_-4E0s9wY-So=\""
+    "}";
+  // urldata without padding
+  const auto reference_base64_wo_pad = "{"
+    "base64: \"99A/+4E0s9wY+So=\","
+    "base64url: \"99A_-4E0s9wY-So\""
+    "}";
+  // clang-format on
+
+  // Decode->Encode->Compare.
+  auto DecEnc = [&base64_schema](const char *json, bool cancel_pad = false) {
+    flatbuffers::Parser parser;
+    // use compact form of json
+    parser.opts.indent_step = -1;
+    parser.opts.base64_cancel_padding = cancel_pad;
+
+    TEST_EQ(parser.Parse(base64_schema), true);
+    // Parse input json.
+    auto parse_done = parser.Parse(json);
+    TEST_EQ(parse_done, true);
+    // Generate new text.
+    std::string text;
+    auto done = flatbuffers::GenerateText(
+        parser, parser.builder_.GetBufferPointer(), &text);
+    TEST_EQ(done, true);
+    return text;
+  };
+
+  // Check reference to himself.
+  TEST_EQ_STR(DecEnc(reference_base64).c_str(), reference_base64);
+  // Check encoding for an ordinal (non-base64) array.
+  TEST_EQ_STR(DecEnc(reference_array).c_str(), reference_base64);
+  // Input strings without padding.
+  TEST_EQ_STR(
+      DecEnc("{base64:\"99A/+4E0s9wY+So\",base64url:\"99A_-4E0s9wY-So\"}")
+          .c_str(),
+      reference_base64);
+  // URL-safe decoder should accepts standard base64 string.
+  TEST_EQ_STR(
+      DecEnc("{base64:\"99A/+4E0s9wY+So=\",base64url:\"99A/+4E0s9wY+So=\"}")
+          .c_str(),
+      reference_base64);
+  // Cancel padding for url-safe encoder.
+  TEST_EQ_STR(DecEnc(reference_array, true).c_str(), reference_base64_wo_pad);
+
+  // Test encode-decode with auto-generated sequences.
+  flatbuffers::Parser ordinal_parser;
+  ordinal_parser.opts.indent_step = -1;
+  TEST_EQ(ordinal_parser.Parse(ordinal_schema), true);
+
+  flatbuffers::Parser base64_parser;
+  base64_parser.opts.indent_step = -1;
+  TEST_EQ(base64_parser.Parse(base64_schema), true);
+
+  // Check both padding modes for base64url.
+  for (auto cancel_pad = 0; cancel_pad < 2; cancel_pad++) {
+    base64_parser.opts.base64_cancel_padding = !!(cancel_pad % 2);
+    // Tests at different lengths.
+    for (size_t pass_indx = 0; pass_indx < 65; pass_indx += 5) {
+      // Generate variable length array.
+      const auto M = pass_indx + 1;
+      // Generate a binary data.
+      std::string bin_text;
+      bin_text += '[';
+      for (size_t j = 0; j < M; j++) {
+        if (j) bin_text += ',';
+        auto v = static_cast<uint8_t>((pass_indx + j) % 0x100);
+        bin_text += std::to_string(v);
+      }
+      bin_text += ']';
+      const std::string bin_json =
+          "{base64: " + bin_text + ",base64url: " + bin_text + "}";
+      // Load ordinal arrays to memory.
+      std::string base64_text;
+      base64_parser.builder_.Clear();
+      TEST_EQ(base64_parser.Parse(bin_json.c_str()), true);
+      // Generate json with base64 encoded strings.
+      TEST_EQ(flatbuffers::GenerateText(
+                  base64_parser, base64_parser.builder_.GetBufferPointer(),
+                  &base64_text),
+              true);
+      // Check new text with DecEnc pattern.
+      TEST_EQ_STR(
+          DecEnc(base64_text.c_str(), base64_parser.opts.base64_cancel_padding)
+              .c_str(),
+          base64_text.c_str());
+      // Decode to the buffer with base64 decoder.
+      base64_parser.builder_.Clear();
+      TEST_EQ(base64_parser.Parse(base64_text.c_str()), true);
+      // Encode the base64 buffer using ordinal vector encoder.
+      std::string ordinal_text;
+      ordinal_parser.builder_.Clear();
+      TEST_EQ(flatbuffers::GenerateText(
+                  ordinal_parser, base64_parser.builder_.GetBufferPointer(),
+                  &ordinal_text),
+              true);
+      // Compare binary matching.
+      TEST_EQ_STR(ordinal_text.c_str(), bin_json.c_str());
+    }
+  }
+}
+
 void UninitializedVectorTest() {
   flatbuffers::FlatBufferBuilder builder;
 
@@ -2414,6 +2540,8 @@ int FlatBufferTests() {
   TypeAliasesTest();
   EndianSwapTest();
   JsonDefaultTest();
+  JsonBase64Test();
+
   FlexBuffersTest();
   UninitializedVectorTest();
   EqualOperatorTest();
