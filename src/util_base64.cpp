@@ -1,4 +1,4 @@
-﻿#include "flatbuffers/util_base64.h"
+#include "flatbuffers/util_base64.h"
 #include "flatbuffers/base.h"
 
 namespace flatbuffers {
@@ -77,16 +77,14 @@ bool PrintBase64Vector(const Vector<uint8_t> &vec, const IDLOptions &opts,
   auto cancel_pad =
       opts.base64_cancel_padding && (b64mode == kBase64ModeUrlSafe);
 
-  if (B3rem == 1)
-  {
+  if (B3rem == 1) {
     text += b64_tbl[src[0] >> 2];
     text += b64_tbl[(0x3F & (src[0] << 4)) | (0 >> 4)];
     if (false == cancel_pad) {
       text += '=';
       text += '=';
     }
-  } else if (B3rem == 2)
-  {
+  } else if (B3rem == 2) {
     text += b64_tbl[src[0] >> 2];
     text += b64_tbl[(0x3F & (src[0] << 4)) | (src[1] >> 4)];
     text += b64_tbl[(0x3F & (src[1] << 2)) | (0 >> 6)];
@@ -100,7 +98,6 @@ bool PrintBase64Vector(const Vector<uint8_t> &vec, const IDLOptions &opts,
 // Decode [ubyte] array from base64 string.
 bool ParseBase64Vector(const std::string &text, const FieldDef *fd,
                        uoffset_t *ovalue, FlatBufferBuilder *_builder) {
-
   // Set an invalid value to 0x80, and use bit7 as error flag.
   static const uint8_t std_decode_table[256] = B64_DECODE_TABLE(0, 0x80, 0);
   static const uint8_t url_decode_table[256] = B64_DECODE_TABLE(1, 0x80, 0);
@@ -111,8 +108,8 @@ bool ParseBase64Vector(const std::string &text, const FieldDef *fd,
   const auto b64_tbl =
       (b64mode == kBase64ModeStandard) ? std_decode_table : url_decode_table;
 
-  auto src_size = text.size();
   auto src = text.c_str();
+  auto src_size = text.size();
 
   // The base64 decoder transforms 4 encoded characters to 3 data bytes.
   // Ignore padding: "abc="->"abc", "ab=="->"ab".
@@ -128,7 +125,8 @@ bool ParseBase64Vector(const std::string &text, const FieldDef *fd,
   const auto dest_size = (src_size * 3) / 4;
 
   // C4rem is number of remained characters in the last char[4] block.
-  // C4rem==1 is forbidden, one data byte encoded by two symbols.
+  // Two encoded symbols are required to decode one data byte.
+  // C4rem==1 is forbidden.
   if ((0 == dest_size) || (1 == C4rem)) return false;
 
   // Create Vector<uint8_t>.
@@ -140,7 +138,7 @@ bool ParseBase64Vector(const std::string &text, const FieldDef *fd,
     uint8_t a1 = b64_tbl[static_cast<uint8_t>(src[1])];
     uint8_t a2 = b64_tbl[static_cast<uint8_t>(src[2])];
     uint8_t a3 = b64_tbl[static_cast<uint8_t>(src[3])];
-    // Early return if an invalid symbol in the input.
+    // Early return if an invalid symbol is detected.
     if (0x80 & (a0 | a1 | a2 | a3)) return false;
     dst[0] = (a0 << 2) | (a1 >> 4);  // a0[5:0]+a1[5:4]
     dst[1] = (a1 << 4) | (a2 >> 2);  // a1[3:0]+a2[5:2]
@@ -154,7 +152,7 @@ bool ParseBase64Vector(const std::string &text, const FieldDef *fd,
     uint8_t a0 = b64_tbl[static_cast<uint8_t>(src[0])];
     uint8_t a1 = (C4rem > 1) ? b64_tbl[static_cast<uint8_t>(src[1])] : 0;
     uint8_t a2 = (C4rem > 2) ? b64_tbl[static_cast<uint8_t>(src[2])] : 0;
-    // Early return if an invalid symbol in the input.
+    // Early return if an invalid symbol is detected.
     if (0x80 & (a0 | a1 | a2)) return false;
     // Number of data bytes equal to (C4rem-1).
     dst[0] = (a0 << 2) | (a1 >> 4);                 // a0[5:0]+a1[5:4]

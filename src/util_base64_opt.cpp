@@ -1,5 +1,5 @@
-﻿#include "flatbuffers/util_base64.h"
 #include "flatbuffers/base.h"
+#include "flatbuffers/util_base64.h"
 
 #if defined(_MSC_VER)
 #  include <stdlib.h>  // _byteswap_ulong
@@ -10,18 +10,18 @@ namespace flatbuffers {
 // Change byte order to minimaze bitshifts during encode/decode.
 // Only is used for versions with optimization.
 static inline uint32_t Base64ByteSwap_u32(uint32_t v) {
-#  if FLATBUFFERS_LITTLEENDIAN
-#    if defined(__GNUC__) || defined(__clang__)
+#if FLATBUFFERS_LITTLEENDIAN
+#  if defined(__GNUC__) || defined(__clang__)
   return __builtin_bswap32(v);
-#    elif defined(_MSC_VER)
+#  elif defined(_MSC_VER)
   return _byteswap_ulong(v);
-#    else
+#  else
   return (((v >> 0) & 0xFF) << 24) | (((v >> 8) & 0xFF) << 16) |
          (((v >> 16) & 0xFF) << 8) | (((v >> 24) & 0xFF) << 0);
-#    endif
-#  else   // FLATBUFFERS_LITTLEENDIAN
+#  endif
+#else   // FLATBUFFERS_LITTLEENDIAN
   return v;
-#  endif  // FLATBUFFERS_LITTLEENDIAN
+#endif  // FLATBUFFERS_LITTLEENDIAN
 }
 
 // M=0: Standard base64 encode table (RFC 4648).
@@ -67,16 +67,23 @@ static inline uint32_t Base64ByteSwap_u32(uint32_t v) {
 // Encode [ubyte] array to base64 string.
 bool PrintBase64Vector(const Vector<uint8_t> &vec, const IDLOptions &opts,
                        std::string *_text, const FieldDef *fd) {
+  // Optimisation techniques.
   // First:
-  // The base64 encoder transforms 3 data bytes to 4 encoded characters.
-  // Byte by byte reading is too costly, it is better to read by uint32 or
-  // uint64 per time. Lets to split the input array to a perfect part (% 3 == 0)
-  // and to a remainder of %3. If the remainder is non zero, can read the
-  // perfect part by uint32 access to the array's memory.
+  // The base64 encoder transforms 3 bytes to 4 symbols (uint8[3] => char[4]).
+  // Byte by byte reading form source is too costly, it is better to read by
+  // four bytes (uint32) per time. Lets to split the input array into two parts:
+  // vec[0;N) = vec[0; M*3)+ vec[M*3, M*3 + R),
+  // where M - number of full (or perfect) 3-byte chunks and R is a remainder.
+  // If R>0 meet, it will be possible to read vec[0; M*3) with help of
+  // uint32* pointer without an address violation.
+  //
   // Second:
-  // Size of the result string computable before encoding.
-  // A memory for the result preallocated before start.
-  // Encoded symbols are written with direct access by a raw pointer.
+  // Size of the result string may be computed before encoding.
+  // Therefore, a memory for the result can be pre-allocated before a start.
+  //
+  // Third:
+  // Encoded symbols are written to the result string with direct access by a
+  // raw pointer.
 
   static const char std_encode_table[64] = B64_ENCODE_TABLE(0);
   static const char url_encode_table[64] = B64_ENCODE_TABLE(1);
@@ -88,33 +95,33 @@ bool PrintBase64Vector(const Vector<uint8_t> &vec, const IDLOptions &opts,
   const auto b64_tbl =
       (b64mode == kBase64ModeStandard) ? std_encode_table : url_encode_table;
 
-  const auto src = vec.data();
+  const uint8_t *const src = vec.data();
   std::string &text = *_text;
   text += '\"';  // open string
 
-  // Size of remainder, must be > 0:
+  // Size of remainder, must be > 0.
   const auto B3rem = (src_size % 3) ? (src_size % 3) : 3;
-  // Number of complete blocks >= 0.
+  // Number of prefect blocks >= 0.
   const auto B3full = (src_size - B3rem) / 3;
   FLATBUFFERS_ASSERT(B3rem > 0);
   FLATBUFFERS_ASSERT((B3full * 3 + B3rem) == src_size);
 
-  // Preallocate destanation memory.
+  // Pre-allocate a memory for the result.
+  // Take into account that the remainder is transformed into a complete
+  // four-symbol sequence with help of padding.
   const auto text_base = text.size();
   text.resize(text_base + (B3full * 4) + 4);
   char *const dst = &(text[text_base]);
 
-  // Make complete remainder.
-  char last_enc4[4];
+  // Make a perfect 4-byte chunk from the remainder.
   uint8_t last_bin3[4] = { 0, 0, 0, 0 };
   for (auto k = B3rem * 0; k < B3rem; k++) last_bin3[k] = src[B3full * 3 + k];
   // First, process the remainder.
   const uint8_t *src_ = &last_bin3[0];
-  auto dst_ = &last_enc4[0];
+  auto dst_ = &dst[B3full * 4 + 0];
 
-  for (size_t k = 0; k < (1 + B3full); k++) {
-    // The remainder is non-zero (B3rem>0) and we can read 4 bytes per round
-    // from the source without memory violation.
+  for (size_t k = 0; k < (B3full + 1); k++) {
+    // The remainder is non-zero (B3rem>0) and we can read 4 bytes per round.
     uint32_t v = *(reinterpret_cast<const uint32_t *>(src_));
     v = Base64ByteSwap_u32(v);
     dst_[0] = b64_tbl[0x3f & (v >> (8 + 18))];
@@ -124,13 +131,14 @@ bool PrintBase64Vector(const Vector<uint8_t> &vec, const IDLOptions &opts,
     src_ = src + (k * 3);
     dst_ = dst + (k * 4);
   }
-  // Set padding ({a,_,_}=>{'x','y','=','='}, {a,b,_}=>{'x','y','z','='}).
-  dst[B3full * 4 + 0] = last_enc4[0];
-  dst[B3full * 4 + 1] = last_enc4[1];
-  dst[B3full * 4 + 2] = (B3rem < 2) ? '=' : last_enc4[2];
-  dst[B3full * 4 + 3] = (B3rem < 3) ? '=' : last_enc4[3];
 
-  // Check the base64_cancel_padding.
+  // Process the remainder
+
+  // Set padding ({a,_,_}=>{'x','y','=','='}, {a,b,_}=>{'x','y','z','='}).
+  if (B3rem < 2) dst[B3full * 4 + 2] = '=';  // override
+  if (B3rem < 3) dst[B3full * 4 + 3] = '=';  // override
+
+  // Check the base64_cancel_padding and trim the result string.
   if (opts.base64_cancel_padding && (b64mode == kBase64ModeUrlSafe)) {
     if ('=' == text.back()) text.pop_back();
     if ('=' == text.back()) text.pop_back();
@@ -143,6 +151,27 @@ bool PrintBase64Vector(const Vector<uint8_t> &vec, const IDLOptions &opts,
 // Decode [ubyte] array from base64 string.
 bool ParseBase64Vector(const std::string &text, const FieldDef *fd,
                        uoffset_t *ovalue, FlatBufferBuilder *_builder) {
+  // Optimisation techniques.
+  // First:
+  // The base64 decoder transforms 4 symbols to 3 bytes (char[4] => uint8[3]).
+  //
+
+  // First:
+  // The base64 encoder transforms 3 data bytes to 4 encoded characters.
+  // Byte by byte reading is too costly, it is better to read by four bytes
+  // (uint32) per time. Lets to split the input array into two parts:
+  // vec[0;N) = vec[0; M*3)+ vec[M*3, M*3 + R),
+  // where M - number of full (or perfect) 3-byte chunks and R is a remainder.
+  // If R>0 meet, it will be possible to read vec[0; M*3) with help of
+  // uint32* pointer without an address violation.
+  //
+  // Second:
+  // Size of the result string may be computed before encoding.
+  // Therefore, a memory for the result can be pre-allocated before a start.
+  //
+  // Third:
+  // Encoded symbols are written to the result string with direct access by a
+  // raw pointer.
 
   // Set an invalid value to 0x1, and use bit0 as error flag.
   static const uint8_t std_decode_table[256] = B64_DECODE_TABLE(0, 1u, 1u);
@@ -154,8 +183,8 @@ bool ParseBase64Vector(const std::string &text, const FieldDef *fd,
   const auto b64_tbl =
       (b64mode == kBase64ModeStandard) ? std_decode_table : url_decode_table;
 
+  const char *const src = text.c_str();
   auto src_size = text.size();
-  auto src = text.c_str();
 
   // The base64 decoder transforms 4 encoded characters to 3 data bytes.
   // Ignore padding: "abc="->"abc", "ab=="->"ab".
@@ -175,14 +204,13 @@ bool ParseBase64Vector(const std::string &text, const FieldDef *fd,
   const auto dest_size = (src_size * 3) / 4;
 
   // C4rem is number of remained characters in the last char[4] block.
-  // C4rem==1 is forbidden, one data byte encoded by two symbols.
+  // Two encoded symbols are required to decode one data byte.
+  // C4rem==1 is forbidden.
   if ((0 == dest_size) || (1 == C4rem)) return false;
 
   // Create Vector<uint8_t>.
   uint8_t *dst = nullptr;
   *ovalue = _builder->CreateUninitializedVector(dest_size, 1, &dst);
-
-  // Base64 decode.
 
   // Build char[4] block for the remainder.
   char last_enc4[4] = { 'A', 'A', 'A', 'A' };
@@ -205,10 +233,10 @@ bool ParseBase64Vector(const std::string &text, const FieldDef *fd,
 
   // Use (err_mask - 1) = {0,~0} as conditional gate for the loop_cnt.
   for (size_t k = 0; loop_cnt & (err_mask - 1); loop_cnt--, k++) {
-    const uint32_t a0 = b64_tbl[static_cast<uint8_t>(_src[0])];
-    const uint32_t a1 = b64_tbl[static_cast<uint8_t>(_src[1])];
-    const uint32_t a2 = b64_tbl[static_cast<uint8_t>(_src[2])];
-    const uint32_t a3 = b64_tbl[static_cast<uint8_t>(_src[3])];
+    uint32_t a0 = b64_tbl[static_cast<uint8_t>(_src[0])];
+    uint32_t a1 = b64_tbl[static_cast<uint8_t>(_src[1])];
+    uint32_t a2 = b64_tbl[static_cast<uint8_t>(_src[2])];
+    uint32_t a3 = b64_tbl[static_cast<uint8_t>(_src[3])];
     // The err_mask will be equal to 1, if an error is detected.
     err_mask = (a0 | a1 | a2 | a3) & 1;
     // Decode by RFC4648 algorithm.
@@ -219,12 +247,12 @@ bool ParseBase64Vector(const std::string &text, const FieldDef *fd,
     _src = src + (k * 4);
     _dst = dst + (k * 3);
   }
-  if (false == err_mask) {
-    // Copy decoded remainder.
-    for (size_t k = 0; k < rem_dec_len; k++) {
-      dst[C4full * 3 + k] = last_dec3[k];
-    }
+
+  // Copy decoded remainder.
+  for (size_t k = 0; k < rem_dec_len; k++) {
+    dst[C4full * 3 + k] = last_dec3[k];
   }
+
   return (false == err_mask);
 }
 
