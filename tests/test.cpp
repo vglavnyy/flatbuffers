@@ -20,7 +20,7 @@
 #include "flatbuffers/registry.h"
 #include "flatbuffers/util.h"
 #include "flatbuffers/util_base64.h"
-
+#include <chrono>
 // clang-format off
 #ifdef FLATBUFFERS_CPP98_STL
   #include "flatbuffers/stl_emulation.h"
@@ -2327,8 +2327,7 @@ void JsonBase64Test() {
 
     TEST_EQ(parser.Parse(base64_schema), true);
     // Parse input json.
-    auto parse_done = parser.Parse(json);
-    TEST_EQ(parse_done, true);
+    TEST_EQ(parser.Parse(json), true);
     // Generate new text.
     std::string text;
     auto done = flatbuffers::GenerateText(
@@ -2367,7 +2366,7 @@ void JsonBase64Test() {
   for (auto cancel_pad = 0; cancel_pad < 2; cancel_pad++) {
     base64_parser.opts.base64_cancel_padding = !!(cancel_pad % 2);
     // Tests at different lengths.
-    for (size_t pass_indx = 0; pass_indx < 65; pass_indx += 5) {
+    for (size_t pass_indx = 0; pass_indx < 65; pass_indx += 3) {
       // Generate variable length array.
       const auto M = pass_indx + 1;
       // Generate a binary data.
@@ -2557,6 +2556,59 @@ int main(int /*argc*/, const char * /*argv*/ []) {
 
   FlatBufferTests();
   FlatBufferBuilderTest();
+
+  if (true) {
+    const char b64set[64 + 1] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+    const auto base64_schema =
+        "table TestBase64{X:[ubyte](base64);}"
+        "root_type TestBase64;"
+        "file_identifier \"B64T\";";
+
+    size_t RN = 2000;
+    size_t NN = 1024 * 1024;
+
+    NN = NN * 4;
+    std::string b64image = "{X: \"";
+    b64image.reserve(NN + 100);
+    for (size_t k = 0; k < NN; k++) { b64image += b64set[(k + k % 3) % 64]; }
+    b64image.append("\"}");
+
+    flatbuffers::Parser base64_parser;
+    base64_parser.opts.indent_step = -1;
+    base64_parser.opts.allow_non_utf8 = true;
+    TEST_EQ(base64_parser.Parse(base64_schema), true);
+    TEST_EQ(base64_parser.Parse(b64image.c_str()), true);
+
+    auto decode_start = std::chrono::steady_clock::now();
+    for (size_t k = 0; k < RN; k++) {
+      base64_parser.builder_.Clear();
+      TEST_EQ(base64_parser.Parse(b64image.c_str()), true);
+    }
+    auto decode_stop = std::chrono::steady_clock::now();
+    auto decode_time = std::chrono::duration <double, std::micro>(decode_stop - decode_start).count() / (RN);
+
+    std::string base64back;
+    TEST_EQ(flatbuffers::GenerateText(
+      base64_parser, base64_parser.builder_.GetBufferPointer(),
+      &base64back),
+      true);
+
+    auto encode_start = std::chrono::steady_clock::now();
+    for (size_t k = 0; k < RN; k++) {
+      base64back.clear();
+      TEST_EQ(flatbuffers::GenerateText(
+                  base64_parser, base64_parser.builder_.GetBufferPointer(),
+                  &base64back),
+              true);
+    }
+    auto encode_stop = std::chrono::steady_clock::now();
+    auto encode_time = std::chrono::duration <double, std::micro>(encode_stop - encode_start).count() / (RN);
+
+    TEST_OUTPUT_LINE("BASE64 dec = %f; enc = %f", (NN / decode_time), (NN / encode_time));
+    TEST_EQ_STR(base64back.c_str(), b64image.c_str());
+  }
 
   if (!testing_fails) {
     TEST_OUTPUT_LINE("ALL TESTS PASSED");

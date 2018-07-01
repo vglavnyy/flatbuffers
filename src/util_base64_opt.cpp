@@ -72,9 +72,9 @@ bool PrintBase64Vector(const Vector<uint8_t> &vec, const IDLOptions &opts,
   // The base64 encoder transforms 3 bytes to 4 symbols (uint8[3] => char[4]).
   // Byte by byte reading form source is too costly, it is better to read by
   // four bytes (uint32) per time. Lets to split the input array into two parts:
-  // vec[0;N) = vec[0; M*3)+ vec[M*3, M*3 + R),
+  // vec[0;N) = vec[0; M*3) + vec[M*3, M*3 + R),
   // where M - number of full (or perfect) 3-byte chunks and R is a remainder.
-  // If R>0 meet, it will be possible to read vec[0; M*3) with help of
+  // If R>0 meet, it will be possible to read from vec[0; M*3) with help of
   // uint32* pointer without an address violation.
   //
   // Second:
@@ -95,7 +95,7 @@ bool PrintBase64Vector(const Vector<uint8_t> &vec, const IDLOptions &opts,
   const auto b64_tbl =
       (b64mode == kBase64ModeStandard) ? std_encode_table : url_encode_table;
 
-  const uint8_t *const src = vec.data();
+  auto src = vec.data();
   std::string &text = *_text;
   text += '\"';  // open string
 
@@ -109,34 +109,47 @@ bool PrintBase64Vector(const Vector<uint8_t> &vec, const IDLOptions &opts,
   // Pre-allocate a memory for the result.
   // Take into account that the remainder is transformed into a complete
   // four-symbol sequence with help of padding.
+  const auto dest_size = (B3full * 4) + 4;
   const auto text_base = text.size();
-  text.resize(text_base + (B3full * 4) + 4);
-  char *const dst = &(text[text_base]);
+  text.resize(text_base + dest_size);
+  char *dst = &(text[text_base]);
 
-  // Make a perfect 4-byte chunk from the remainder.
-  uint8_t last_bin3[4] = { 0, 0, 0, 0 };
-  for (auto k = B3rem * 0; k < B3rem; k++) last_bin3[k] = src[B3full * 3 + k];
-  // First, process the remainder.
-  const uint8_t *src_ = &last_bin3[0];
-  auto dst_ = &dst[B3full * 4 + 0];
+  // debug check
+  const auto src_stop = src + src_size;
+  const auto dst_stop = dst + dest_size;
+  (void)src_stop;
+  (void)dst_stop;
 
-  for (size_t k = 0; k < (B3full + 1); k++) {
+  for (size_t k = 0; k < B3full; k++) {
     // The remainder is non-zero (B3rem>0) and we can read 4 bytes per round.
-    uint32_t v = *(reinterpret_cast<const uint32_t *>(src_));
+    uint32_t v = *(reinterpret_cast<const uint32_t *>(src));
     v = Base64ByteSwap_u32(v);
-    dst_[0] = b64_tbl[0x3f & (v >> (8 + 18))];
-    dst_[1] = b64_tbl[0x3f & (v >> (8 + 12))];
-    dst_[2] = b64_tbl[0x3f & (v >> (8 + 6))];
-    dst_[3] = b64_tbl[0x3f & (v >> (8 + 0))];
-    src_ = src + (k * 3);
-    dst_ = dst + (k * 4);
+    dst[0] = b64_tbl[0x3f & (v >> (8 + 18))];
+    dst[1] = b64_tbl[0x3f & (v >> (8 + 12))];
+    dst[2] = b64_tbl[0x3f & (v >> (8 + 6))];
+    dst[3] = b64_tbl[0x3f & (v >> (8 + 0))];
+    dst += 4;
+    src += 3;
   }
 
-  // Process the remainder
+  // Process the remainder.
+  // Set padding: {a,_,_}=>{'x','y','=','='}, {a,b,_}=>{'x','y','z','='}.
+  {
+    // Make a perfect 4-byte chunk from the remainder.
+    uint8_t _src_remainder[4] = { 0, 0, 0, 0 };
+    for (auto k = B3rem * 0; k < B3rem; k++) { _src_remainder[k] = src[k]; }
+    uint32_t v = *(reinterpret_cast<const uint32_t *>(_src_remainder));
+    v = Base64ByteSwap_u32(v);
+    dst[0] = b64_tbl[0x3f & (v >> (8 + 18))];
+    dst[1] = b64_tbl[0x3f & (v >> (8 + 12))];
+    dst[2] = (B3rem < 2) ? '=' : b64_tbl[0x3f & (v >> (8 + 6))];
+    dst[3] = (B3rem < 3) ? '=' : b64_tbl[0x3f & (v >> (8 + 0))];
+    dst += 4;
+    src += B3rem;
+  }
 
-  // Set padding ({a,_,_}=>{'x','y','=','='}, {a,b,_}=>{'x','y','z','='}).
-  if (B3rem < 2) dst[B3full * 4 + 2] = '=';  // override
-  if (B3rem < 3) dst[B3full * 4 + 3] = '=';  // override
+  FLATBUFFERS_ASSERT(src_stop == src);
+  FLATBUFFERS_ASSERT(dst_stop == dst);
 
   // Check the base64_cancel_padding and trim the result string.
   if (opts.base64_cancel_padding && (b64mode == kBase64ModeUrlSafe)) {
@@ -154,24 +167,21 @@ bool ParseBase64Vector(const std::string &text, const FieldDef *fd,
   // Optimisation techniques.
   // First:
   // The base64 decoder transforms 4 symbols to 3 bytes (char[4] => uint8[3]).
-  //
-
-  // First:
-  // The base64 encoder transforms 3 data bytes to 4 encoded characters.
-  // Byte by byte reading is too costly, it is better to read by four bytes
-  // (uint32) per time. Lets to split the input array into two parts:
-  // vec[0;N) = vec[0; M*3)+ vec[M*3, M*3 + R),
-  // where M - number of full (or perfect) 3-byte chunks and R is a remainder.
-  // If R>0 meet, it will be possible to read vec[0; M*3) with help of
+  // Byte by byte write is too costly, it is better to write by four bytes
+  // (uint32) per time. Lets to split the output array into two parts:
+  // out[0;N) = out[0; M*4) + out[M*4, M*4 + R),
+  // where M - number of full (or perfect) 4-byte chunks and R is a remainder.
+  // If R>0 meet, it will be possible to write to out[0; M*3) with help of
   // uint32* pointer without an address violation.
   //
   // Second:
-  // Size of the result string may be computed before encoding.
+  // Size of the result vector may be computed before decode.
   // Therefore, a memory for the result can be pre-allocated before a start.
   //
   // Third:
-  // Encoded symbols are written to the result string with direct access by a
-  // raw pointer.
+  // A bit-mask approach is used for loop termination due to invalid symbols in
+  // the input string. This approach reduces the number of conditional branches
+  // to the one.
 
   // Set an invalid value to 0x1, and use bit0 as error flag.
   static const uint8_t std_decode_table[256] = B64_DECODE_TABLE(0, 1u, 1u);
@@ -183,7 +193,7 @@ bool ParseBase64Vector(const std::string &text, const FieldDef *fd,
   const auto b64_tbl =
       (b64mode == kBase64ModeStandard) ? std_decode_table : url_decode_table;
 
-  const char *const src = text.c_str();
+  auto src = text.c_str();
   auto src_size = text.size();
 
   // The base64 decoder transforms 4 encoded characters to 3 data bytes.
@@ -212,48 +222,64 @@ bool ParseBase64Vector(const std::string &text, const FieldDef *fd,
   uint8_t *dst = nullptr;
   *ovalue = _builder->CreateUninitializedVector(dest_size, 1, &dst);
 
-  // Build char[4] block for the remainder.
-  char last_enc4[4] = { 'A', 'A', 'A', 'A' };
-  // Make the local copy of the remainder.
-  for (size_t k = 0; k < C4rem; k++) { last_enc4[k] = src[C4full * 4 + k]; }
-  // Size of the last decoded block can be 1,2 or 3.
-  const auto rem_dec_len = C4rem ? (C4rem - 1) : 0;
-  FLATBUFFERS_ASSERT((C4full * 3 + rem_dec_len) == dest_size);
+  // debug check
+  const auto src_stop = src + src_size;
+  const auto dst_stop = dst + dest_size;
+  (void)src_stop;
+  (void)dst_stop;
 
-  // Main decode loop:
-  // At the first iteration decode the last block (remainder).
-  uint8_t last_dec3[4];
-  auto _dst = &last_dec3[0];
-  const char *_src = &last_enc4[0];
-  // Loop counter: the last block plus all perfect blocks.
-  auto loop_cnt = (1 + C4full);
-  // Error mask takes only two states: (0)-ok and (1)-fail.
-  // Type of <err_mask> must match with unsigned <loop_cnt>.
-  size_t err_mask = loop_cnt * 0;
+  // Unsigned error mask takes only two states: (0)-ok and (1)-fail.
+  size_t err_mask = 0;
 
   // Use (err_mask - 1) = {0,~0} as conditional gate for the loop_cnt.
-  for (size_t k = 0; loop_cnt & (err_mask - 1); loop_cnt--, k++) {
-    uint32_t a0 = b64_tbl[static_cast<uint8_t>(_src[0])];
-    uint32_t a1 = b64_tbl[static_cast<uint8_t>(_src[1])];
-    uint32_t a2 = b64_tbl[static_cast<uint8_t>(_src[2])];
-    uint32_t a3 = b64_tbl[static_cast<uint8_t>(_src[3])];
+  for (size_t loop_cnt = C4full; loop_cnt & (err_mask - 1); loop_cnt--) {
+    uint32_t a0 = b64_tbl[static_cast<uint8_t>(src[0])];
+    uint32_t a1 = b64_tbl[static_cast<uint8_t>(src[1])];
+    uint32_t a2 = b64_tbl[static_cast<uint8_t>(src[2])];
+    uint32_t a3 = b64_tbl[static_cast<uint8_t>(src[3])];
     // The err_mask will be equal to 1, if an error is detected.
     err_mask = (a0 | a1 | a2 | a3) & 1;
     // Decode by RFC4648 algorithm.
     uint32_t aa = (a0 << (8 + 18 - 1)) | (a1 << (8 + 12 - 1)) |
                   (a2 << (8 + 6 - 1)) | (a3 << (8 - 1));
     // C4rem > 0, it allows to write 4 bytes per round without violations.
-    *(reinterpret_cast<uint32_t *>(_dst)) = Base64ByteSwap_u32(aa);
-    _src = src + (k * 4);
-    _dst = dst + (k * 3);
+    *(reinterpret_cast<uint32_t *>(dst)) = Base64ByteSwap_u32(aa);
+    dst += 3;
+    src += 4;
   }
 
-  // Copy decoded remainder.
-  for (size_t k = 0; k < rem_dec_len; k++) {
-    dst[C4full * 3 + k] = last_dec3[k];
+  // Process the remainder.
+  if (0 == err_mask) {
+    uint32_t a0 = C4rem > 0 ? b64_tbl[static_cast<uint8_t>(src[0])] : 0;
+    uint32_t a1 = C4rem > 1 ? b64_tbl[static_cast<uint8_t>(src[1])] : 0;
+    uint32_t a2 = C4rem > 2 ? b64_tbl[static_cast<uint8_t>(src[2])] : 0;
+    uint32_t a3 = C4rem > 3 ? b64_tbl[static_cast<uint8_t>(src[3])] : 0;
+    // The err_mask will be equal to 1, if an error is detected.
+    err_mask = (a0 | a1 | a2 | a3) & 1;
+    // Decode by RFC4648 algorithm.
+    uint32_t aa = (a0 << (8 + 18 - 1)) | (a1 << (8 + 12 - 1)) |
+                  (a2 << (8 + 6 - 1)) | (a3 << (8 - 1));
+    // save to local memory
+    uint8_t _rem_decoded[4];
+    *(reinterpret_cast<uint32_t *>(_rem_decoded)) = Base64ByteSwap_u32(aa);
+    // copy decoded result
+    if (C4rem > 1) dst[0] = _rem_decoded[0];
+    if (C4rem > 2) dst[1] = _rem_decoded[1];
+    if (C4rem > 3) dst[2] = _rem_decoded[2];
+    dst += C4rem - 1;
+    src += C4rem;
   }
 
-  return (false == err_mask);
+  // Ensures.
+  if (0 == err_mask) {
+    FLATBUFFERS_ASSERT(src_stop == src);
+    FLATBUFFERS_ASSERT(dst_stop == dst);
+  } else {
+    FLATBUFFERS_ASSERT(src_stop > src);
+    FLATBUFFERS_ASSERT(dst_stop > dst);
+  }
+
+  return (0 == err_mask);
 }
 
 }  // namespace flatbuffers
