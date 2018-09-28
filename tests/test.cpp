@@ -1,4 +1,4 @@
-/*
+﻿/*
  * Copyright 2014 Google Inc. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,10 +14,6 @@
  * limitations under the License.
  */
 #include <cmath>
-#if defined(FLATBUFFERS_FORCE_LOCALE_INDEPENDENT)
-#include <clocale>
-#endif
-
 #include "flatbuffers/flatbuffers.h"
 #include "flatbuffers/idl.h"
 #include "flatbuffers/minireflect.h"
@@ -2297,13 +2293,6 @@ int FlatBufferTests() {
     );
   #endif
 
-  // If request testing under specific C-locale.
-  #if defined(FLATBUFFERS_FORCE_LOCALE_INDEPENDENT)
-  // Assume that FLATBUFFERS_FORCE_LOCALE_INDEPENDENT is string with locale for test.
-  TEST_OUTPUT_LINE("Set global C-locale to: %s", FLATBUFFERS_FORCE_LOCALE_INDEPENDENT);
-  TEST_NOTNULL(std::setlocale(LC_ALL, FLATBUFFERS_FORCE_LOCALE_INDEPENDENT));
-  #endif
-
   // Run our various test suites:
 
   std::string rawbuf;
@@ -2373,9 +2362,6 @@ int FlatBufferTests() {
 }
 
 int main(int /*argc*/, const char * /*argv*/ []) {
-  // Disable stdout buffering to prevent information lost on assertion.
-  setvbuf(stdout, NULL, _IONBF, 0);
-  setvbuf(stderr, NULL, _IONBF, 0);
 
   FlatBufferTests();
   FlatBufferBuilderTest();

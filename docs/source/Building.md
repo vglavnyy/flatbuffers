@@ -80,18 +80,6 @@ target_link_libraries(own_project_target PRIVATE flatbuffers)
 When build your project the `flatbuffers` library will be compiled and linked 
 to a target as part of your project.
 
-#### Enforce locale-independent mode
-If an end-user application may use non ascii-based [locale](@ref flatbuffers_locale_cpp) 
-add this directive to enforce locale-independent mode of Flatbuffers library:
-```cmake
-set(FLATBUFFERS_FORCE_LOCALE_INDEPENDENT "")
-```
-or
-```cmake
-set(FLATBUFFERS_FORCE_LOCALE_INDEPENDENT "<test-locale>")
-```
-to `CMakeLists.txt` file before `add_subdirectory(${FLATBUFFERS_SRC_DIR})` line.
-
 #### For Google Play apps
 
 For applications on Google Play that integrate this library, usage is tracked.
