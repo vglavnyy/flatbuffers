@@ -1,0 +1,24 @@
+---
+# switch off 'modernize-loop-convert' (MSVC2010 does not support it)
+
+Checks: '-*,clang-diagnostic-*, clang-analyzer-*, bugprone-*, \n
+        google-*, misc-*, performance-*, portability-*, \n
+        modernize-*, \n
+        -modernize-loop-convert'
+
+WarningsAsErrors: ''
+HeaderFilterRegex: ''
+AnalyzeTemporaryDtors: false
+FormatStyle:     none
+User:            flatbuffers
+CheckOptions:    
+  - key:             google-readability-braces-around-statements.ShortStatementLines
+    value:           '2' # if/else plus only one line of a statement
+  - key:             performance-move-constructor-init.IncludeStyle
+    value:           google
+  - key:             performance-type-promotion-in-math-fn.IncludeStyle
+    value:           google
+  - key:             performance-unnecessary-value-param.IncludeStyle
+    value:           google
+...
+

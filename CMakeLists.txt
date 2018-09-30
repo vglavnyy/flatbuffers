@@ -413,15 +413,14 @@ if (FLATBUFFERS_STANDALONE_PROJECT AND (CMAKE_VERSION VERSION_GREATER 3.0))
   )
 
   # add clang-tidy target
-  #get_property(FLATBUFFERS_INC_DIRS DIRECTORY PROPERTY INCLUDE_DIRECTORIES)
+  # usage: cmake --build . --target clang-tidy &> tidy.log
+  # usage: make clang-tidy &> tidy.log
   add_custom_target(
     clang-tidy
     COMMAND clang-tidy
     # use `compile_comands.json` to extract compiler arguments
-    # CMAKE_EXPORT_COMPILE_COMMANDS shpuld be set to ON
+    # CMAKE_EXPORT_COMPILE_COMMANDS should be set to ON
     -p="${CMAKE_CURRENT_BINARY_DIR}"
-    #-extra-arg="-std=c++11"
-    #-extra-arg="-I ${FLATBUFFERS_INC_DIRS}"
     ${FLATBUFFERS_ALL_SOURCE_FILES}
   )
 endif() # FLATBUFFERS_STANDALONE_PROJECT
