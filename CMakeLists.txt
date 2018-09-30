@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 2.8)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 project(FlatBuffers)
 
@@ -402,12 +403,25 @@ if (FLATBUFFERS_STANDALONE_PROJECT AND (CMAKE_VERSION VERSION_GREATER 3.0))
       EXCLUDE REGEX "[/\\][.~].*")
 
   # add clang-format target 
+  # usage: cmake --build . --target clang-format
+  # usage: make clang-format
   add_custom_target(
       clang-format
       COMMAND clang-format
       -style=file -i -verbose
-      ${FLATBUFFERS_ALL_SOURCE_FILES})
-  # usage: cmake --build . --target clang-format
-  # usage: make clang-format
+      ${FLATBUFFERS_ALL_SOURCE_FILES}
+  )
 
+  # add clang-tidy target
+  #get_property(FLATBUFFERS_INC_DIRS DIRECTORY PROPERTY INCLUDE_DIRECTORIES)
+  add_custom_target(
+    clang-tidy
+    COMMAND clang-tidy
+    # use `compile_comands.json` to extract compiler arguments
+    # CMAKE_EXPORT_COMPILE_COMMANDS shpuld be set to ON
+    -p="${CMAKE_CURRENT_BINARY_DIR}"
+    #-extra-arg="-std=c++11"
+    #-extra-arg="-I ${FLATBUFFERS_INC_DIRS}"
+    ${FLATBUFFERS_ALL_SOURCE_FILES}
+  )
 endif() # FLATBUFFERS_STANDALONE_PROJECT
