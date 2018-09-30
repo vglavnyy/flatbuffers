@@ -375,3 +375,39 @@ include(CMake/BuildFlatBuffers.cmake)
 if(FLATBUFFERS_PACKAGE_DEBIAN)
     include(CMake/PackageDebian.cmake)
 endif()
+
+# Targets for code formatting and checking.
+set(FLATBUFFERS_STANDALONE_PROJECT OFF)
+if (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+  set(FLATBUFFERS_STANDALONE_PROJECT ON)
+endif ()
+
+if (FLATBUFFERS_STANDALONE_PROJECT AND (CMAKE_VERSION VERSION_GREATER 3.0))
+# https://stackoverflow.com/questions/32280717/cmake-clang-tidy-or-other-script-as-custom-target
+  # Get all project files
+  unset(FLATBUFFERS_ALL_SOURCE_FILES CACHE)
+  file(GLOB_RECURSE
+      FLATBUFFERS_ALL_SOURCE_FILES
+      *.cpp *.cc *.h *.hpp)
+  # exclude generated files
+  list(FILTER
+      FLATBUFFERS_ALL_SOURCE_FILES
+      EXCLUDE REGEX ".*_generated.*")
+  list(FILTER
+      FLATBUFFERS_ALL_SOURCE_FILES
+      EXCLUDE REGEX "[/\\]monster_test.*")
+  # exclude temporary directories and files
+  list(FILTER
+      FLATBUFFERS_ALL_SOURCE_FILES
+      EXCLUDE REGEX "[/\\][.~].*")
+
+  # add clang-format target 
+  add_custom_target(
+      clang-format
+      COMMAND clang-format
+      -style=file -i -verbose
+      ${FLATBUFFERS_ALL_SOURCE_FILES})
+  # usage: cmake --build . --target clang-format
+  # usage: make clang-format
+
+endif() # FLATBUFFERS_STANDALONE_PROJECT
