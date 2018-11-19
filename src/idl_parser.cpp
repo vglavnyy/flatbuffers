@@ -66,6 +66,13 @@ static_assert(BASE_TYPE_UNION == static_cast<BaseType>(reflection::Union),
 // form:
 #define NEXT() ECHECK(Next())
 #define EXPECT(tok) ECHECK(Expect(tok))
+// Select from two alternatives:
+#define EXPECT2(t1, t2) \
+  if (Is(t1)) {         \
+    NEXT();             \
+  } else {              \
+    EXPECT(t2);         \
+  }
 
 static bool ValidateUTF8(const std::string &str) {
   const char *s = &str[0];
@@ -484,6 +491,7 @@ CheckedError Parser::Next() {
 
 // Check if a given token is next.
 bool Parser::Is(int t) const { return t == token_; }
+bool Parser::Is(int t1, int t2) const { return Is(t1) || Is(t2); }
 
 bool Parser::IsIdent(const char *id) const {
   return token_ == kTokenIdentifier && attribute_ == id;
@@ -868,11 +876,7 @@ CheckedError Parser::ParseAnyValue(Value &val, FieldDef *field,
         ECHECK(SkipAnyJsonValue());  // The table.
         ECHECK(ParseComma());
         auto next_name = attribute_;
-        if (Is(kTokenStringConstant)) {
-          NEXT();
-        } else {
-          EXPECT(kTokenIdentifier);
-        }
+        EXPECT2(kTokenStringConstant, kTokenIdentifier);
         if (next_name != type_name)
           return Error("missing type field after this union value: " +
                        type_name);
@@ -921,7 +925,7 @@ CheckedError Parser::ParseAnyValue(Value &val, FieldDef *field,
     case BASE_TYPE_LONG:
     case BASE_TYPE_ULONG: {
       if (field && field->attributes.Lookup("hash") &&
-          (token_ == kTokenIdentifier || token_ == kTokenStringConstant)) {
+          Is(kTokenIdentifier, kTokenStringConstant)) {
         ECHECK(ParseHash(val, field));
       } else {
         ECHECK(ParseSingleValue(field ? &field->name : nullptr, val, false));
@@ -943,53 +947,39 @@ void Parser::SerializeStruct(const StructDef &struct_def, const Value &val) {
   builder_.AddStructOffset(val.offset, builder_.GetSize());
 }
 
-template <typename F>
+template<typename F>
 CheckedError Parser::ParseTableDelimiters(size_t &fieldn,
-                                          const StructDef *struct_def,
-                                          F body) {
+                                          const StructDef *struct_def, F body) {
   // We allow tables both as JSON object{ .. } with field names
   // or vector[..] with all fields in order
+  const auto is_nested_vector = struct_def && Is('[');
+  EXPECT(is_nested_vector ? '[' : '{');
+  const char terminator = is_nested_vector ? ']' : '}';
   size_t nested_fieldn = 0;
-  char terminator = '}';
-  bool is_nested_vector = struct_def && Is('[');
-  if (is_nested_vector) {
-    NEXT();
-    terminator = ']';
-  } else {
-    EXPECT('{');
-  }
-  // Bypass {} or [] objects.
-  if (false == Is(terminator)) {
-    for (;;) {
-      std::string name;
-      if (is_nested_vector) {
-        FLATBUFFERS_ASSERT(nested_fieldn >= fieldn);
-        if (nested_fieldn >= struct_def->fields.vec.size()) {
-          return Error("too many unnamed fields in nested array");
-        }
-        name = struct_def->fields.vec[nested_fieldn]->name;
-        nested_fieldn++;
-      }
-      else {
-        name = attribute_;
-        if (Is(kTokenStringConstant)) {
-          NEXT();
-        }
-        else {
-          EXPECT(opts.strict_json ? kTokenStringConstant : kTokenIdentifier);
-        }
-        if (!opts.protobuf_ascii_alike || !(Is('{') || Is('['))) EXPECT(':');
-      }
+  for (auto expect_next = !Is(terminator); expect_next;) {
+    if (is_nested_vector) {
+      FLATBUFFERS_ASSERT(nested_fieldn >= fieldn);
+      if (nested_fieldn >= struct_def->fields.vec.size()) break; // !error
+      const auto &name = struct_def->fields.vec[nested_fieldn]->name;
       ECHECK(body(name, fieldn, struct_def));
-      if (Is(terminator)) break;
+      nested_fieldn++;
+    } else {
+      const auto name = attribute_;
+      EXPECT2(kTokenStringConstant,
+              opts.strict_json ? kTokenStringConstant : kTokenIdentifier);
+      auto proto_obj = opts.protobuf_ascii_alike && (Is('{') || Is('['));
+      if (false == proto_obj) EXPECT(':');
+      ECHECK(body(name, fieldn, struct_def));
+    }
+    expect_next = !Is(terminator);
+    if (expect_next) {
       ECHECK(ParseComma());
-      // Ignore single traling comma for non-strict json mode.
-      if (false == opts.strict_json && Is(terminator)) break;
+      // A new value expected after comma if the strict mode is active.
+      expect_next = !Is(terminator) || opts.strict_json;
     }
   }
-  if (is_nested_vector && nested_fieldn != struct_def->fields.vec.size()) {
-    return Error("wrong number of unnamed fields in table vector");
-  }
+  if (is_nested_vector && nested_fieldn != struct_def->fields.vec.size())
+    return Error("wrong number of unnamed fields in nested vector");
   NEXT();
   return NoError();
 }
@@ -1246,7 +1236,7 @@ CheckedError Parser::ParseMetaData(SymbolTable<Value> *attributes) {
     NEXT();
     for (;;) {
       auto name = attribute_;
-      if (false == (Is(kTokenIdentifier) || Is(kTokenStringConstant)))
+      if (false == Is(kTokenIdentifier, kTokenStringConstant))
         return Error("attribute name must be either identifier or string: " +
           name);
       if (known_attributes_.find(name) == known_attributes_.end())
@@ -1400,7 +1390,7 @@ CheckedError Parser::TokenError() {
 CheckedError Parser::ParseSingleValue(const std::string *name, Value &e,
                                       bool check_now) {
   // First see if this could be a conversion function:
-  if (token_ == kTokenIdentifier && *cursor_ == '(') {
+  if (Is(kTokenIdentifier) && *cursor_ == '(') {
     // todo: Extract processing of conversion functions to ParseFunction.
     const auto functionname = attribute_;
     if (!IsFloat(e.type.base_type)) {
@@ -1447,14 +1437,14 @@ CheckedError Parser::ParseSingleValue(const std::string *name, Value &e,
     ECHECK(TryTypedValue(name, dtoken, check, e, req, &match))
   // clang-format on
 
-  if (token_ == kTokenStringConstant || token_ == kTokenIdentifier) {
+  if (Is(kTokenStringConstant, kTokenIdentifier)) {
     const auto kTokenStringOrIdent = token_;
     // The string type is a most probable type, check it first.
     TRY_ECHECK(false, kTokenStringConstant,
                e.type.base_type == BASE_TYPE_STRING, BASE_TYPE_STRING);
 
     // avoid escaped and non-ascii in the string
-    if ((token_ == kTokenStringConstant) && IsScalar(e.type.base_type) &&
+    if (Is(kTokenStringConstant) && IsScalar(e.type.base_type) &&
         !attr_is_trivial_ascii_string_) {
       return Error(
           std::string("type mismatch or invalid value, an initializer of "
@@ -1484,7 +1474,7 @@ CheckedError Parser::ParseSingleValue(const std::string *name, Value &e,
       match = true;
     }
     // float/integer number in string
-    if ((token_ == kTokenStringConstant) && IsScalar(e.type.base_type)) {
+    if (Is(kTokenStringConstant) && IsScalar(e.type.base_type)) {
       // remove trailing whitespaces from attribute_
       auto last = attribute_.find_last_not_of(' ');
       if (std::string::npos != last)  // has non-whitespace
@@ -2612,11 +2602,7 @@ CheckedError Parser::DoParse(const char *source, const char **include_paths,
     } else if (IsIdent("attribute")) {
       NEXT();
       auto name = attribute_;
-      if (Is(kTokenIdentifier)) {
-        NEXT();
-      } else {
-        EXPECT(kTokenStringConstant);
-      }
+      EXPECT2(kTokenIdentifier, kTokenStringConstant);
       EXPECT(';');
       known_attributes_[name] = false;
     } else if (IsIdent("rpc_service")) {
