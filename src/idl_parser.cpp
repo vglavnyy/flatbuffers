@@ -987,10 +987,10 @@ CheckedError Parser::ParseTableDelimiters(size_t &fieldn,
       if (false == opts.strict_json && Is(terminator)) break;
     }
   }
-  NEXT();
   if (is_nested_vector && nested_fieldn != struct_def->fields.vec.size()) {
     return Error("wrong number of unnamed fields in table vector");
   }
+  NEXT();
   return NoError();
 }
 
