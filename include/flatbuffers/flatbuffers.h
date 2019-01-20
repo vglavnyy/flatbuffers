@@ -19,7 +19,25 @@
 
 #include "flatbuffers/base.h"
 
+#if defined(FLATBUFFERS_NAN_DEFAULTS)
+#include <cmath>
+#endif
+
 namespace flatbuffers {
+// Generic 'operator==' with conditional specialisations.
+template<typename T> inline bool IsTheSameAs(T e, T def) { return e == def; }
+
+#if defined(FLATBUFFERS_NAN_DEFAULTS) && \
+    (!defined(_MSC_VER) || _MSC_VER >= 1800)
+// Like `operator==(e, def)` with weak NaN if T=(float|double).
+template<> inline bool IsTheSameAs<float>(float e, float def) {
+  return (e == def) || (std::isnan(def) && std::isnan(e));
+}
+template<> inline bool IsTheSameAs<double>(double e, double def) {
+  return (e == def) || (std::isnan(def) && std::isnan(e));
+}
+#endif
+
 // Wrapper for uoffset_t to allow safe template specialization.
 // Value is allowed to be 0 to indicate a null object (see e.g. AddOffset).
 template<typename T> struct Offset {
@@ -193,6 +211,7 @@ template<typename T> class Vector {
   uoffset_t size() const { return EndianScalar(length_); }
 
   // Deprecated: use size(). Here for backwards compatibility.
+  FLATBUFFERS_ATTRIBUTE(deprecated("use size() instead"))
   uoffset_t Length() const { return size(); }
 
   typedef typename IndirectHelper<T>::return_type return_type;
@@ -344,6 +363,14 @@ template<typename T> static inline size_t VectorLength(const Vector<T> *v) {
   return v ? v->Length() : 0;
 }
 
+// Lexicographically compare two strings (possibly containing nulls), and
+// return true if the first is less than the second.
+static inline bool StringLessThan(const char *a_data, uoffset_t a_size,
+                                  const char *b_data, uoffset_t b_size) {
+  const auto cmp = memcmp(a_data, b_data, (std::min)(a_size, b_size));
+  return cmp == 0 ? a_size < b_size : cmp < 0;
+}
+
 struct String : public Vector<char> {
   const char *c_str() const { return reinterpret_cast<const char *>(Data()); }
   std::string str() const { return std::string(c_str(), Length()); }
@@ -357,7 +384,7 @@ struct String : public Vector<char> {
   // clang-format on
 
   bool operator<(const String &o) const {
-    return strcmp(c_str(), o.c_str()) < 0;
+    return StringLessThan(this->data(), this->size(), o.data(), o.size());
   }
 };
 
@@ -970,8 +997,8 @@ class FlatBufferBuilder {
   /// @warning Do NOT attempt to use this FlatBufferBuilder afterwards!
   /// @return A `FlatBuffer` that owns the buffer and its allocator and
   /// behaves similar to a `unique_ptr` with a deleter.
-  /// Deprecated: use Release() instead
-  DetachedBuffer ReleaseBufferPointer() {
+  FLATBUFFERS_ATTRIBUTE(deprecated("use Release() instead")) DetachedBuffer
+  ReleaseBufferPointer() {
     Finished();
     return buf_.release();
   }
@@ -1079,7 +1106,7 @@ class FlatBufferBuilder {
   // Like PushElement, but additionally tracks the field this represents.
   template<typename T> void AddElement(voffset_t field, T e, T def) {
     // We don't serialize values equal to the default.
-    if (e == def && !force_defaults_) return;
+    if (IsTheSameAs(e, def) && !force_defaults_) return;
     auto off = PushElement(e);
     TrackField(field, off);
   }
@@ -1179,7 +1206,7 @@ class FlatBufferBuilder {
         auto vt_offset_ptr = reinterpret_cast<uoffset_t *>(it);
         auto vt2 = reinterpret_cast<voffset_t *>(buf_.data_at(*vt_offset_ptr));
         auto vt2_size = *vt2;
-        if (vt1_size != vt2_size || memcmp(vt2, vt1, vt1_size)) continue;
+        if (vt1_size != vt2_size || 0 != memcmp(vt2, vt1, vt1_size)) continue;
         vt_use = *vt_offset_ptr;
         buf_.pop(GetSize() - vtableoffsetloc);
         break;
@@ -1200,7 +1227,7 @@ class FlatBufferBuilder {
     return vtableoffsetloc;
   }
 
-  // DEPRECATED: call the version above instead.
+  FLATBUFFERS_ATTRIBUTE(deprecated("call the version above instead"))
   uoffset_t EndTable(uoffset_t start, voffset_t /*numfields*/) {
     return EndTable(start);
   }
@@ -1731,6 +1758,19 @@ class FlatBufferBuilder {
                                      reinterpret_cast<uint8_t **>(buf));
   }
 
+
+  // @brief Create a vector of scalar type T given as input a vector of scalar
+  // type U, useful with e.g. pre "enum class" enums, or any existing scalar
+  // data of the wrong type.
+  template<typename T, typename U>
+  Offset<Vector<T>> CreateVectorScalarCast(const U *v, size_t len) {
+    AssertScalarT<T>();
+    AssertScalarT<U>();
+    StartVector(len, sizeof(T));
+    for (auto i = len; i > 0;) { PushElement(static_cast<T>(v[--i])); }
+    return Offset<Vector<T>>(EndVector(len));
+  }
+
   /// @brief Write a struct by itself, typically to be part of a union.
   template<typename T> Offset<const T *> CreateStruct(const T &structobj) {
     NotNested();
@@ -1821,8 +1861,8 @@ protected:
     bool operator()(const Offset<String> &a, const Offset<String> &b) const {
       auto stra = reinterpret_cast<const String *>(buf_->data_at(a.o));
       auto strb = reinterpret_cast<const String *>(buf_->data_at(b.o));
-      return strncmp(stra->c_str(), strb->c_str(),
-                     (std::min)(stra->size(), strb->size()) + 1) < 0;
+      return StringLessThan(stra->data(), stra->size(),
+                            strb->data(), strb->size());
     }
     const vector_downward *buf_;
   };
@@ -2075,7 +2115,7 @@ class Verifier FLATBUFFERS_FINAL_CLASS {
     if (!Verify<uoffset_t>(start)) return 0;
     auto o = ReadScalar<uoffset_t>(buf_ + start);
     // May not point to itself.
-    Check(o != 0);
+    if (!Check(o != 0)) return 0;
     // Can't wrap around / buffers are max 2GB.
     if (!Check(static_cast<soffset_t>(o) >= 0)) return 0;
     // Must be inside the buffer to create a pointer from it (pointer outside
@@ -2220,7 +2260,7 @@ class Table {
 
   template<typename T> bool SetField(voffset_t field, T val, T def) {
     auto field_offset = GetOptionalFieldOffset(field);
-    if (!field_offset) return val == def;
+    if (!field_offset) return IsTheSameAs(val, def);
     WriteScalar(data_ + field_offset, val);
     return true;
   }
