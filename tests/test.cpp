@@ -42,6 +42,24 @@ using namespace MyGame::Example;
 
 void FlatBufferBuilderTest();
 
+//template<Any E> struct AnyAsType { typedef std::nullptr_t type; };
+//template<typename T> struct TypeAsAny { static constexpr Any value = Any_NONE; };
+//template<> struct AnyAsType<Any_Monster> { typedef Monster type; };
+//template<> struct TypeAsAny<Monster> { static constexpr Any value = Any_Monster; };
+//template<> struct AnyAsType<Any_TestSimpleTableWithEnum> { typedef TestSimpleTableWithEnum type; };
+//template<> struct TypeAsAny<TestSimpleTableWithEnum> { static constexpr Any value = Any_TestSimpleTableWithEnum; };
+//template<> struct AnyAsType<Any_MyGame_Example2_Monster> { typedef MyGame::Example2::Monster type; };
+//template<> struct TypeAsAny<MyGame::Example2::Monster> { static constexpr Any value = Any_MyGame_Example2_Monster; };
+//template<typename T, bool compatible = true> const T *test_as() const {
+//  using U = TypeAsAny<T>::value;
+//  static_assert(!compatible || Any_NONE != U, "invalid non-union type");
+//  return Any_NONE != U && U == test_type() ? GetPointer<const T *>(VT_TEST)
+//    : nullptr;
+//}
+//template<Any E> const typename AnyAsType<E>::type *test_as() const {
+//  return test_as<AnyAsType<E, true>::type>();
+//}
+
 // Include simple random number generator to ensure results will be the
 // same cross platform.
 // http://en.wikipedia.org/wiki/Park%E2%80%93Miller_random_number_generator
@@ -276,6 +294,13 @@ void AccessFlatBufferTest(const uint8_t *flatbuf, size_t length,
   TEST_EQ(monster->color(), Color_Blue);
 
   // Example of accessing a union:
+  TEST_EQ(monster->test_type(), Any_Monster);
+  TEST_NOTNULL(monster->test_as<Monster>());
+  TEST_EQ(monster->test_as<Monster>(), monster->test_as<Any_Monster>());
+  TEST_ASSERT(monster->test_as<Any_TestSimpleTableWithEnum>() == nullptr);
+  TEST_ASSERT(monster->test_as<int>() == nullptr);
+  TEST_ASSERT(monster->test_as<Any_NONE>() == nullptr);
+
   TEST_EQ(monster->test_type(), Any_Monster);  // First make sure which it is.
   auto monster2 = reinterpret_cast<const Monster *>(monster->test());
   TEST_NOTNULL(monster2);

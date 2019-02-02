@@ -163,20 +163,19 @@ inline const char *EnumNameAny(Any e) {
   return EnumNamesAny()[index];
 }
 
+struct AnyUnionTraits {
+  template<Any e> struct T{ typedef void type; };
+  template<typename T> struct E { static constexpr Any value = Any_NONE; };
+};
+template<> struct AnyUnionTraits::T<Any_Monster> { typedef Monster type; };
+template<> struct AnyUnionTraits::T<Any_TestSimpleTableWithEnum> { typedef TestSimpleTableWithEnum type; };
+template<> struct AnyUnionTraits::T<Any_MyGame_Example2_Monster> { typedef MyGame::Example2::Monster type; };
+template<> struct AnyUnionTraits::E<Monster> { static constexpr Any value = Any_Monster; };
+template<> struct AnyUnionTraits::E<TestSimpleTableWithEnum> { static constexpr Any value = Any_TestSimpleTableWithEnum; };
+template<> struct AnyUnionTraits::E<MyGame::Example2::Monster> { static constexpr Any value = Any_MyGame_Example2_Monster; };
+// compatibility
 template<typename T> struct AnyTraits {
-  static const Any enum_value = Any_NONE;
-};
-
-template<> struct AnyTraits<Monster> {
-  static const Any enum_value = Any_Monster;
-};
-
-template<> struct AnyTraits<TestSimpleTableWithEnum> {
-  static const Any enum_value = Any_TestSimpleTableWithEnum;
-};
-
-template<> struct AnyTraits<MyGame::Example2::Monster> {
-  static const Any enum_value = Any_MyGame_Example2_Monster;
+  static const Any enum_value = AnyUnionTraits::E<T>::value;
 };
 
 struct AnyUnion {
@@ -1228,22 +1227,38 @@ struct Monster FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   Any test_type() const {
     return static_cast<Any>(GetField<uint8_t>(VT_TEST_TYPE, 0));
   }
+  // Is it possible to mutate the type of the union?
   bool mutate_test_type(Any _test_type) {
     return SetField<uint8_t>(VT_TEST_TYPE, static_cast<uint8_t>(_test_type), 0);
   }
+
+  FLATBUFFERS_ATTRIBUTE(deprecated("unsafe method, use test_as<type>() instead"))
   const void *test() const {
     return GetPointer<const void *>(VT_TEST);
   }
-  template<typename T> const T *test_as() const;
-  const Monster *test_as_Monster() const {
-    return test_type() == Any_Monster ? static_cast<const Monster *>(test()) : nullptr;
+
+  template<typename T> const T *test_as() const {
+    using E = AnyUnionTraits::E<T>;
+    return (Any_NONE != E::value) && (E::value == test_type())
+               ? GetPointer<const T *>(VT_TEST)
+               : nullptr;
   }
+
+  template<Any E>
+  inline const typename AnyUnionTraits::T<E>::type *test_as() const {
+    return test_as<AnyUnionTraits::T<E>::type>();
+  }
+
+  const Monster *test_as_Monster() const { return test_as<Monster>(); }
+
   const TestSimpleTableWithEnum *test_as_TestSimpleTableWithEnum() const {
-    return test_type() == Any_TestSimpleTableWithEnum ? static_cast<const TestSimpleTableWithEnum *>(test()) : nullptr;
+    return test_as<TestSimpleTableWithEnum>();
   }
+
   const MyGame::Example2::Monster *test_as_MyGame_Example2_Monster() const {
-    return test_type() == Any_MyGame_Example2_Monster ? static_cast<const MyGame::Example2::Monster *>(test()) : nullptr;
+    return test_as<MyGame::Example2::Monster>();
   }
+
   void *mutable_test() {
     return GetPointer<void *>(VT_TEST);
   }
@@ -1593,18 +1608,6 @@ struct Monster FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   void UnPackTo(MonsterT *_o, const flatbuffers::resolver_function_t *_resolver = nullptr) const;
   static flatbuffers::Offset<Monster> Pack(flatbuffers::FlatBufferBuilder &_fbb, const MonsterT* _o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
 };
-
-template<> inline const Monster *Monster::test_as<Monster>() const {
-  return test_as_Monster();
-}
-
-template<> inline const TestSimpleTableWithEnum *Monster::test_as<TestSimpleTableWithEnum>() const {
-  return test_as_TestSimpleTableWithEnum();
-}
-
-template<> inline const MyGame::Example2::Monster *Monster::test_as<MyGame::Example2::Monster>() const {
-  return test_as_MyGame_Example2_Monster();
-}
 
 template<> inline const Monster *Monster::any_unique_as<Monster>() const {
   return any_unique_as_M();
@@ -2436,7 +2439,7 @@ inline void Monster::UnPackTo(MonsterT *_o, const flatbuffers::resolver_function
   { auto _e = testhashs64_fnv1(); _o->testhashs64_fnv1 = _e; };
   { auto _e = testhashu64_fnv1(); _o->testhashu64_fnv1 = _e; };
   { auto _e = testhashs32_fnv1a(); _o->testhashs32_fnv1a = _e; };
-  { auto _e = testhashu32_fnv1a(); //scalar resolver, naked 
+  { auto _e = testhashu32_fnv1a(); //scalar resolver, naked
 if (_resolver) (*_resolver)(reinterpret_cast<void **>(&_o->testhashu32_fnv1a), static_cast<flatbuffers::hash_value_t>(_e)); else _o->testhashu32_fnv1a = nullptr; };
   { auto _e = testhashs64_fnv1a(); _o->testhashs64_fnv1a = _e; };
   { auto _e = testhashu64_fnv1a(); _o->testhashu64_fnv1a = _e; };
@@ -2452,16 +2455,16 @@ if (_resolver) (*_resolver)(reinterpret_cast<void **>(&_o->testhashu32_fnv1a), s
   { auto _e = vector_of_doubles(); if (_e) { _o->vector_of_doubles.resize(_e->size()); for (flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->vector_of_doubles[_i] = _e->Get(_i); } } };
   { auto _e = parent_namespace_test(); if (_e) _o->parent_namespace_test = flatbuffers::unique_ptr<MyGame::InParentNamespaceT>(_e->UnPack(_resolver)); };
   { auto _e = vector_of_referrables(); if (_e) { _o->vector_of_referrables.resize(_e->size()); for (flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->vector_of_referrables[_i] = flatbuffers::unique_ptr<ReferrableT>(_e->Get(_i)->UnPack(_resolver)); } } };
-  { auto _e = single_weak_reference(); //scalar resolver, naked 
+  { auto _e = single_weak_reference(); //scalar resolver, naked
 if (_resolver) (*_resolver)(reinterpret_cast<void **>(&_o->single_weak_reference), static_cast<flatbuffers::hash_value_t>(_e)); else _o->single_weak_reference = nullptr; };
   { auto _e = vector_of_weak_references(); if (_e) { _o->vector_of_weak_references.resize(_e->size()); for (flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { //vector resolver, naked
 if (_resolver) (*_resolver)(reinterpret_cast<void **>(&_o->vector_of_weak_references[_i]), static_cast<flatbuffers::hash_value_t>(_e->Get(_i))); else _o->vector_of_weak_references[_i] = nullptr; } } };
   { auto _e = vector_of_strong_referrables(); if (_e) { _o->vector_of_strong_referrables.resize(_e->size()); for (flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->vector_of_strong_referrables[_i] = flatbuffers::unique_ptr<ReferrableT>(_e->Get(_i)->UnPack(_resolver)); } } };
-  { auto _e = co_owning_reference(); //scalar resolver, naked 
+  { auto _e = co_owning_reference(); //scalar resolver, naked
 if (_resolver) (*_resolver)(reinterpret_cast<void **>(&_o->co_owning_reference), static_cast<flatbuffers::hash_value_t>(_e)); else _o->co_owning_reference = nullptr; };
   { auto _e = vector_of_co_owning_references(); if (_e) { _o->vector_of_co_owning_references.resize(_e->size()); for (flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { //vector resolver, default_ptr_type
 if (_resolver) (*_resolver)(reinterpret_cast<void **>(&_o->vector_of_co_owning_references[_i]), static_cast<flatbuffers::hash_value_t>(_e->Get(_i)));/* else do nothing */; } } };
-  { auto _e = non_owning_reference(); //scalar resolver, naked 
+  { auto _e = non_owning_reference(); //scalar resolver, naked
 if (_resolver) (*_resolver)(reinterpret_cast<void **>(&_o->non_owning_reference), static_cast<flatbuffers::hash_value_t>(_e)); else _o->non_owning_reference = nullptr; };
   { auto _e = vector_of_non_owning_references(); if (_e) { _o->vector_of_non_owning_references.resize(_e->size()); for (flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { //vector resolver, naked
 if (_resolver) (*_resolver)(reinterpret_cast<void **>(&_o->vector_of_non_owning_references[_i]), static_cast<flatbuffers::hash_value_t>(_e->Get(_i))); else _o->vector_of_non_owning_references[_i] = nullptr; } } };
