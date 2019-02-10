@@ -7,6 +7,48 @@
 #include "flatbuffers/flatbuffers.h"
 #include "flatbuffers/flexbuffers.h"
 
+namespace flatbuffers { // create a special new flatc namespace?
+  struct GeneratedUnion {
+    virtual ~GeneratedUnion() {}
+    // Return simple offset not Offset<T>, union can't be a root.
+    virtual uoffset_t Pack(FlatBufferBuilder &_fbb, const rehasher_function_t *_rehasher) const = 0;
+    virtual bool Compare(const GeneratedUnion* other) const = 0;
+  };
+
+  template<typename T>
+  struct GeneratedUnionValue FLATBUFFERS_FINAL_CLASS
+      : public flatbuffers::GeneratedUnion {
+    T value;
+
+    GeneratedUnionValue(const typename T::TableType *raw, const resolver_function_t *resolver) {
+      raw->UnPackTo(&value, resolver); // delegate to generated UnPackTo() func
+    }
+
+    GeneratedUnionValue(T &&val) : value(std::move(val)) {} // r-value only
+
+    uoffset_t Pack(FlatBufferBuilder &_fbb, const rehasher_function_t *_rehasher) const override {
+      return T::TableType::Pack(_fbb, &value, _rehasher).o; // delegate to generated Pack() func
+    }
+
+    bool Compare(const GeneratedUnion* other) const override {
+      FLATBUFFERS_ASSERT(other && dynamic_cast<decltype(this)>(other));
+      return value == static_cast<decltype(this)>(other)->value;
+    }
+  };
+
+  template<typename T, typename... Args>
+  GeneratedUnion *CreateGeneratedUnion(Args&&... args) {
+    return new GeneratedUnionValue<T>(std::forward<Args>(args)...);
+  }
+
+  template<typename T>
+  inline GeneratedUnion *CreateGeneratedUnion(
+      const void *obj, const resolver_function_t *resolver) {
+    auto ptr = static_cast<const typename T::TableType *>(obj);
+    return new GeneratedUnionValue<T>(ptr, resolver);
+  }
+}
+
 namespace MyGame {
 
 struct InParentNamespace;
@@ -164,100 +206,133 @@ inline const char *EnumNameAny(Any e) {
 }
 
 struct AnyUnionTraits {
-  template<Any e> struct T{ typedef void type; };
-  template<typename T> struct E { static constexpr Any value = Any_NONE; };
+  typedef Any type_enum;
+  template<Any e> struct T { typedef std::nullptr_t type; };
+  template<typename T> struct E;// { static constexpr Any value = Any_NONE; };
 };
 template<> struct AnyUnionTraits::T<Any_Monster> { typedef Monster type; };
 template<> struct AnyUnionTraits::T<Any_TestSimpleTableWithEnum> { typedef TestSimpleTableWithEnum type; };
 template<> struct AnyUnionTraits::T<Any_MyGame_Example2_Monster> { typedef MyGame::Example2::Monster type; };
+
+template<> struct AnyUnionTraits::E<std::nullptr_t> { static constexpr Any value = Any_NONE; };
 template<> struct AnyUnionTraits::E<Monster> { static constexpr Any value = Any_Monster; };
 template<> struct AnyUnionTraits::E<TestSimpleTableWithEnum> { static constexpr Any value = Any_TestSimpleTableWithEnum; };
 template<> struct AnyUnionTraits::E<MyGame::Example2::Monster> { static constexpr Any value = Any_MyGame_Example2_Monster; };
+
 // compatibility
 template<typename T> struct AnyTraits {
   static const Any enum_value = AnyUnionTraits::E<T>::value;
 };
 
-struct AnyUnion {
-  Any type;
-  void *value;
+struct AnyUnion FLATBUFFERS_FINAL_CLASS {
+  typedef std::pair<flatbuffers::GeneratedUnion *, Any> TaggedTableType;
 
-  AnyUnion() : type(Any_NONE), value(nullptr) {}
-  AnyUnion(AnyUnion&& u) FLATBUFFERS_NOEXCEPT :
-    type(Any_NONE), value(nullptr)
-    { std::swap(type, u.type); std::swap(value, u.value); }
-  AnyUnion(const AnyUnion &) FLATBUFFERS_NOEXCEPT;
-  AnyUnion &operator=(const AnyUnion &u) FLATBUFFERS_NOEXCEPT
-    { AnyUnion t(u); std::swap(type, t.type); std::swap(value, t.value); return *this; }
-  AnyUnion &operator=(AnyUnion &&u) FLATBUFFERS_NOEXCEPT
-    { std::swap(type, u.type); std::swap(value, u.value); return *this; }
+  TaggedTableType union_;
+
+  static typename TaggedTableType None() { return {nullptr, Any_NONE}; }
+
+  AnyUnion() FLATBUFFERS_NOEXCEPT : union_(None()) {}
+
+  // AnyUnion is movable if TaggedTableType holds pointer
+  AnyUnion(AnyUnion &&u) FLATBUFFERS_NOEXCEPT : union_(None()) {
+    u.union_.swap(union_);
+  }
+  AnyUnion &operator=(AnyUnion &&u) FLATBUFFERS_NOEXCEPT {
+    u.union_.swap(union_); return *this;
+  }
+
+  bool Assign(const AnyUnion&) {
+    return false;
+  }
+
+  AnyUnion(const AnyUnion &u): union_(None()) {
+    Assign(u);
+  }
+
+  AnyUnion &operator=(const AnyUnion &u) {
+    Assign(u); return *this;
+  }
+
   ~AnyUnion() { Reset(); }
 
-  void Reset();
-
-#ifndef FLATBUFFERS_CPP98_STL
-  template <typename T>
-  void Set(T&& val) {
-    Reset();
-    type = AnyTraits<typename T::TableType>::enum_value;
-    if (type != Any_NONE) {
-      value = new T(std::forward<T>(val));
+  template<typename T> void Set(T &&val) {
+    typedef flatbuffers::GeneratedUnionValue<T> DT;
+    if (AnyUnionTraits::E<T>::value == type()) {
+      static_cast<DT *>(union_.first)->value = std::forward<T>(val);
+    } else {
+      Reset();
+      auto t = AnyUnionTraits::E<T>::value;
+      if(t != Any_NONE)
+        TaggedTableType(CreateGeneratedUnion<T>(std::forward<T>(val)), t).swap(union_);
     }
   }
-#endif  // FLATBUFFERS_CPP98_STL
 
-  static void *UnPack(const void *obj, Any type, const flatbuffers::resolver_function_t *resolver);
-  flatbuffers::Offset<void> Pack(flatbuffers::FlatBufferBuilder &_fbb, const flatbuffers::rehasher_function_t *_rehasher = nullptr) const;
+  Any type() const  FLATBUFFERS_NOEXCEPT {
+    return union_.second;
+  }
 
-  MonsterT *AsMonster() {
-    return type == Any_Monster ?
-      reinterpret_cast<MonsterT *>(value) : nullptr;
+  void Reset() {
+    delete union_.first;
+    None().swap(union_);
   }
-  const MonsterT *AsMonster() const {
-    return type == Any_Monster ?
-      reinterpret_cast<const MonsterT *>(value) : nullptr;
+
+  flatbuffers::uoffset_t Pack(flatbuffers::FlatBufferBuilder &_fbb, const flatbuffers::rehasher_function_t *_rehasher = nullptr) const {
+    return union_.first ? union_.first->Pack(_fbb, _rehasher) : 0;
   }
-  TestSimpleTableWithEnumT *AsTestSimpleTableWithEnum() {
-    return type == Any_TestSimpleTableWithEnum ?
-      reinterpret_cast<TestSimpleTableWithEnumT *>(value) : nullptr;
+
+  template<typename T>
+  TaggedTableType CreateTaggedAny(const void *obj, const flatbuffers::resolver_function_t *resolver) {
+    auto e = AnyUnionTraits::E<typename T::TableType>::value;
+    return TaggedTableType(flatbuffers::CreateGeneratedUnion<T>(obj, resolver), e);
   }
-  const TestSimpleTableWithEnumT *AsTestSimpleTableWithEnum() const {
-    return type == Any_TestSimpleTableWithEnum ?
-      reinterpret_cast<const TestSimpleTableWithEnumT *>(value) : nullptr;
+
+  // factory methods
+  Any UnPack(const void *obj, Any otype, const flatbuffers::resolver_function_t *resolver)
+  {
+    Reset();
+    switch (otype) {
+      case Any_Monster: {
+        union_ = CreateTaggedAny<MonsterT>(obj, resolver);
+        break;
+      }
+      case Any_TestSimpleTableWithEnum: {
+        union_ = CreateTaggedAny<TestSimpleTableWithEnumT>(obj, resolver);
+        break;
+      }
+      case Any_MyGame_Example2_Monster: {
+        union_ = CreateTaggedAny<MyGame::Example2::MonsterT>(obj, resolver);
+        break;
+      }
+      default: break;
+    }
+    return type();
   }
-  MyGame::Example2::MonsterT *AsMyGame_Example2_Monster() {
-    return type == Any_MyGame_Example2_Monster ?
-      reinterpret_cast<MyGame::Example2::MonsterT *>(value) : nullptr;
+
+  template<typename T> const T *get_if() const {
+    typedef flatbuffers::GeneratedUnionValue<T> U;
+    auto t = AnyUnionTraits::E<typename T::TableType>::value;
+    return (Any_NONE != t) && (type() == t)
+               ? &static_cast<const U *>(union_.first)->value
+               : nullptr;
   }
-  const MyGame::Example2::MonsterT *AsMyGame_Example2_Monster() const {
-    return type == Any_MyGame_Example2_Monster ?
-      reinterpret_cast<const MyGame::Example2::MonsterT *>(value) : nullptr;
+  template<typename T> T *get_if() {
+    // Effective C++ (3rd). C++17 has std::as_const(*this).
+    return const_cast<T *>(static_cast<const AnyUnion&>(*this).get_if<T>());
   }
+
+  MonsterT *AsMonster() { return get_if<MonsterT>(); }
+  const MonsterT *AsMonster() const { return get_if<MonsterT>(); }
+  TestSimpleTableWithEnumT *AsTestSimpleTableWithEnum() { return get_if<TestSimpleTableWithEnumT>(); }
+  const TestSimpleTableWithEnumT *AsTestSimpleTableWithEnum() const { return get_if<TestSimpleTableWithEnumT>(); }
+  MyGame::Example2::MonsterT *AsMyGame_Example2_Monster() { return get_if<MyGame::Example2::MonsterT>(); }
+  const MyGame::Example2::MonsterT *AsMyGame_Example2_Monster() const { return get_if<MyGame::Example2::MonsterT>(); }
 };
 
 
 inline bool operator==(const AnyUnion &lhs, const AnyUnion &rhs) {
-  if (lhs.type != rhs.type) return false;
-  switch (lhs.type) {
-    case Any_NONE: {
-      return true;
-    }
-    case Any_Monster: {
-      return *(reinterpret_cast<const MonsterT *>(lhs.value)) ==
-             *(reinterpret_cast<const MonsterT *>(rhs.value));
-    }
-    case Any_TestSimpleTableWithEnum: {
-      return *(reinterpret_cast<const TestSimpleTableWithEnumT *>(lhs.value)) ==
-             *(reinterpret_cast<const TestSimpleTableWithEnumT *>(rhs.value));
-    }
-    case Any_MyGame_Example2_Monster: {
-      return *(reinterpret_cast<const MyGame::Example2::MonsterT *>(lhs.value)) ==
-             *(reinterpret_cast<const MyGame::Example2::MonsterT *>(rhs.value));
-    }
-    default: {
-      return false;
-    }
-  }
+  return lhs.type() == rhs.type() &&
+         (lhs.type() == Any_NONE ||
+          lhs.union_.first->Compare(rhs.union_.first));
 }
 bool VerifyAny(flatbuffers::Verifier &verifier, const void *obj, Any type);
 bool VerifyAnyVector(flatbuffers::Verifier &verifier, const flatbuffers::Vector<flatbuffers::Offset<void>> *values, const flatbuffers::Vector<uint8_t> *types);
@@ -1227,20 +1302,17 @@ struct Monster FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   Any test_type() const {
     return static_cast<Any>(GetField<uint8_t>(VT_TEST_TYPE, 0));
   }
-  // Is it possible to mutate the type of the union?
-  bool mutate_test_type(Any _test_type) {
-    return SetField<uint8_t>(VT_TEST_TYPE, static_cast<uint8_t>(_test_type), 0);
-  }
 
-  FLATBUFFERS_ATTRIBUTE(deprecated("unsafe method, use test_as<type>() instead"))
+  //FLATBUFFERS_ATTRIBUTE(deprecated("unsafe method, use test_as<type>() instead"))
   const void *test() const {
     return GetPointer<const void *>(VT_TEST);
   }
 
   template<typename T> const T *test_as() const {
-    using E = AnyUnionTraits::E<T>;
+    typedef typename std::remove_cv<T>::type B;
+    typedef AnyUnionTraits::E<B> E;
     return (Any_NONE != E::value) && (E::value == test_type())
-               ? GetPointer<const T *>(VT_TEST)
+               ? GetPointer<const B *>(VT_TEST)
                : nullptr;
   }
 
@@ -2425,8 +2497,7 @@ inline void Monster::UnPackTo(MonsterT *_o, const flatbuffers::resolver_function
   { auto _e = name(); if (_e) _o->name = _e->str(); };
   { auto _e = inventory(); if (_e) { _o->inventory.resize(_e->size()); for (flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->inventory[_i] = _e->Get(_i); } } };
   { auto _e = color(); _o->color = _e; };
-  { auto _e = test_type(); _o->test.type = _e; };
-  { auto _e = test(); if (_e) _o->test.value = AnyUnion::UnPack(_e, test_type(), _resolver); };
+  { auto _e = test(); if (_e) _o->test.UnPack(_e, test_type(), _resolver); };
   { auto _e = test4(); if (_e) { _o->test4.resize(_e->size()); for (flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->test4[_i] = *_e->Get(_i); } } };
   { auto _e = testarrayofstring(); if (_e) { _o->testarrayofstring.resize(_e->size()); for (flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->testarrayofstring[_i] = _e->Get(_i)->str(); } } };
   { auto _e = testarrayoftables(); if (_e) { _o->testarrayoftables.resize(_e->size()); for (flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->testarrayoftables[_i] = flatbuffers::unique_ptr<MonsterT>(_e->Get(_i)->UnPack(_resolver)); } } };
@@ -2489,7 +2560,7 @@ inline flatbuffers::Offset<Monster> CreateMonster(flatbuffers::FlatBufferBuilder
   auto _name = _fbb.CreateString(_o->name);
   auto _inventory = _o->inventory.size() ? _fbb.CreateVector(_o->inventory) : 0;
   auto _color = _o->color;
-  auto _test_type = _o->test.type;
+  auto _test_type = _o->test.type();
   auto _test = _o->test.Pack(_fbb);
   auto _test4 = _o->test4.size() ? _fbb.CreateVectorOfStructs(_o->test4) : 0;
   auto _testarrayofstring = _o->testarrayofstring.size() ? _fbb.CreateVectorOfStrings(_o->testarrayofstring) : 0;
@@ -2642,21 +2713,10 @@ inline flatbuffers::Offset<TypeAliases> CreateTypeAliases(flatbuffers::FlatBuffe
 
 inline bool VerifyAny(flatbuffers::Verifier &verifier, const void *obj, Any type) {
   switch (type) {
-    case Any_NONE: {
-      return true;
-    }
-    case Any_Monster: {
-      auto ptr = reinterpret_cast<const Monster *>(obj);
-      return verifier.VerifyTable(ptr);
-    }
-    case Any_TestSimpleTableWithEnum: {
-      auto ptr = reinterpret_cast<const TestSimpleTableWithEnum *>(obj);
-      return verifier.VerifyTable(ptr);
-    }
-    case Any_MyGame_Example2_Monster: {
-      auto ptr = reinterpret_cast<const MyGame::Example2::Monster *>(obj);
-      return verifier.VerifyTable(ptr);
-    }
+    case Any_NONE: return true;
+    case Any_Monster: return verifier.VerifyTable(static_cast<const Monster *>(obj));
+    case Any_TestSimpleTableWithEnum: return verifier.VerifyTable(static_cast<const TestSimpleTableWithEnum *>(obj));
+    case Any_MyGame_Example2_Monster: return verifier.VerifyTable(static_cast<const MyGame::Example2::Monster *>(obj));
     default: return false;
   }
 }
@@ -2671,84 +2731,6 @@ inline bool VerifyAnyVector(flatbuffers::Verifier &verifier, const flatbuffers::
     }
   }
   return true;
-}
-
-inline void *AnyUnion::UnPack(const void *obj, Any type, const flatbuffers::resolver_function_t *resolver) {
-  switch (type) {
-    case Any_Monster: {
-      auto ptr = reinterpret_cast<const Monster *>(obj);
-      return ptr->UnPack(resolver);
-    }
-    case Any_TestSimpleTableWithEnum: {
-      auto ptr = reinterpret_cast<const TestSimpleTableWithEnum *>(obj);
-      return ptr->UnPack(resolver);
-    }
-    case Any_MyGame_Example2_Monster: {
-      auto ptr = reinterpret_cast<const MyGame::Example2::Monster *>(obj);
-      return ptr->UnPack(resolver);
-    }
-    default: return nullptr;
-  }
-}
-
-inline flatbuffers::Offset<void> AnyUnion::Pack(flatbuffers::FlatBufferBuilder &_fbb, const flatbuffers::rehasher_function_t *_rehasher) const {
-  switch (type) {
-    case Any_Monster: {
-      auto ptr = reinterpret_cast<const MonsterT *>(value);
-      return CreateMonster(_fbb, ptr, _rehasher).Union();
-    }
-    case Any_TestSimpleTableWithEnum: {
-      auto ptr = reinterpret_cast<const TestSimpleTableWithEnumT *>(value);
-      return CreateTestSimpleTableWithEnum(_fbb, ptr, _rehasher).Union();
-    }
-    case Any_MyGame_Example2_Monster: {
-      auto ptr = reinterpret_cast<const MyGame::Example2::MonsterT *>(value);
-      return CreateMonster(_fbb, ptr, _rehasher).Union();
-    }
-    default: return 0;
-  }
-}
-
-inline AnyUnion::AnyUnion(const AnyUnion &u) FLATBUFFERS_NOEXCEPT : type(u.type), value(nullptr) {
-  switch (type) {
-    case Any_Monster: {
-      FLATBUFFERS_ASSERT(false);  // MonsterT not copyable.
-      break;
-    }
-    case Any_TestSimpleTableWithEnum: {
-      value = new TestSimpleTableWithEnumT(*reinterpret_cast<TestSimpleTableWithEnumT *>(u.value));
-      break;
-    }
-    case Any_MyGame_Example2_Monster: {
-      value = new MyGame::Example2::MonsterT(*reinterpret_cast<MyGame::Example2::MonsterT *>(u.value));
-      break;
-    }
-    default:
-      break;
-  }
-}
-
-inline void AnyUnion::Reset() {
-  switch (type) {
-    case Any_Monster: {
-      auto ptr = reinterpret_cast<MonsterT *>(value);
-      delete ptr;
-      break;
-    }
-    case Any_TestSimpleTableWithEnum: {
-      auto ptr = reinterpret_cast<TestSimpleTableWithEnumT *>(value);
-      delete ptr;
-      break;
-    }
-    case Any_MyGame_Example2_Monster: {
-      auto ptr = reinterpret_cast<MyGame::Example2::MonsterT *>(value);
-      delete ptr;
-      break;
-    }
-    default: break;
-  }
-  value = nullptr;
-  type = Any_NONE;
 }
 
 inline bool VerifyAnyUniqueAliases(flatbuffers::Verifier &verifier, const void *obj, AnyUniqueAliases type) {
