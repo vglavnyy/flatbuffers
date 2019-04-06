@@ -13,7 +13,7 @@ public struct Referrable : IFlatbufferObject
   private Table __p;
   public ByteBuffer ByteBuffer { get { return __p.bb; } }
   public static Referrable GetRootAsReferrable(ByteBuffer _bb) { return GetRootAsReferrable(_bb, new Referrable()); }
-  public static Referrable GetRootAsReferrable(ByteBuffer _bb, Referrable obj) { return (obj.__assign(_bb.GetInt(_bb.Position) + _bb.Position, _bb)); }
+  public static Referrable GetRootAsReferrable(ByteBuffer _bb, Referrable obj) { FlatBufferConstants.FLATBUFFERS_1_11_1(); return (obj.__assign(_bb.GetInt(_bb.Position) + _bb.Position, _bb)); }
   public void __init(int _i, ByteBuffer _bb) { __p.bb_pos = _i; __p.bb = _bb; }
   public Referrable __assign(int _i, ByteBuffer _bb) { __init(_i, _bb); return this; }
 
@@ -22,15 +22,15 @@ public struct Referrable : IFlatbufferObject
 
   public static Offset<Referrable> CreateReferrable(FlatBufferBuilder builder,
       ulong id = 0) {
-    builder.StartObject(1);
+    builder.StartTable(1);
     Referrable.AddId(builder, id);
     return Referrable.EndReferrable(builder);
   }
 
-  public static void StartReferrable(FlatBufferBuilder builder) { builder.StartObject(1); }
+  public static void StartReferrable(FlatBufferBuilder builder) { builder.StartTable(1); }
   public static void AddId(FlatBufferBuilder builder, ulong id) { builder.AddUlong(0, id, 0); }
   public static Offset<Referrable> EndReferrable(FlatBufferBuilder builder) {
-    int o = builder.EndObject();
+    int o = builder.EndTable();
     return new Offset<Referrable>(o);
   }
 

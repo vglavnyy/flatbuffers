@@ -96,6 +96,7 @@ cc_binary(
         "src/idl_gen_python.cpp",
         "src/idl_gen_rust.cpp",
         "src/idl_gen_text.cpp",
+        "src/util.cpp",
     ],
     includes = [
         "grpc/",
@@ -133,7 +134,6 @@ cc_test(
         "src/idl_parser.cpp",
         "src/reflection.cpp",
         "src/util.cpp",
-        "monster_test_generated.h",
         "tests/namespace_test/namespace_test1_generated.h",
         "tests/namespace_test/namespace_test2_generated.h",
         "tests/test.cpp",
@@ -154,14 +154,22 @@ cc_test(
         ":tests/monster_test.bfbs",
         ":tests/monster_test.fbs",
         ":tests/monsterdata_test.golden",
+        ":tests/monsterdata_test.json",
         ":tests/prototest/imported.proto",
         ":tests/prototest/test.golden",
         ":tests/prototest/test.proto",
         ":tests/prototest/test_union.golden",
         ":tests/unicode_test.json",
         ":tests/union_vector/union_vector.fbs",
+        ":tests/union_vector/union_vector.json",
+        ":tests/monster_extra.fbs",
+        ":tests/monsterdata_extra.json",
     ],
     includes = ["include/"],
+    deps = [
+        ":monster_extra_cc_fbs",
+        ":monster_test_cc_fbs",
+    ],
 )
 
 # Test bzl rules
@@ -174,4 +182,9 @@ flatbuffer_cc_library(
         "tests/include_test/include_test1.fbs",
         "tests/include_test/sub/include_test2.fbs",
     ],
+)
+
+flatbuffer_cc_library(
+    name = "monster_extra_cc_fbs",
+    srcs = ["tests/monster_extra.fbs"],
 )

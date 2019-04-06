@@ -23,6 +23,12 @@ option(FLATBUFFERS_LIBCXX_WITH_CLANG "Force libc++ when using Clang" ON)
 option(FLATBUFFERS_CODE_SANITIZE
       "Add '-fsanitize' flags to 'flattests' and 'flatc' targets."
       OFF)
+option(FLATBUFFERS_PACKAGE_REDHAT
+       "Build an rpm using the 'package' target."
+       OFF)
+option(FLATBUFFERS_PACKAGE_DEBIAN
+       "Build an deb using the 'package' target."
+       OFF)
 
 if(NOT FLATBUFFERS_BUILD_FLATC AND FLATBUFFERS_BUILD_TESTS)
     message(WARNING
@@ -36,12 +42,18 @@ if(DEFINED FLATBUFFERS_MAX_PARSING_DEPTH)
   message(STATUS "FLATBUFFERS_MAX_PARSING_DEPTH: ${FLATBUFFERS_MAX_PARSING_DEPTH}")
 endif()
 
-# Auto-detect locale-narrow 'strtod_l' function.
+# Auto-detect locale-narrow 'strtod_l' and  'strtoull_l' functions.
 if(NOT DEFINED FLATBUFFERS_LOCALE_INDEPENDENT)
+  set(FLATBUFFERS_LOCALE_INDEPENDENT 0)
   if(MSVC)
-    check_cxx_symbol_exists(_strtof_l stdlib.h FLATBUFFERS_LOCALE_INDEPENDENT)
+    check_cxx_symbol_exists(_strtof_l stdlib.h FLATBUFFERS_HAS_STRTOF_L)
+    check_cxx_symbol_exists(_strtoui64_l stdlib.h FLATBUFFERS_HAS_STRTOULL_L)
   else()
-    check_cxx_symbol_exists(strtof_l stdlib.h FLATBUFFERS_LOCALE_INDEPENDENT)
+    check_cxx_symbol_exists(strtof_l stdlib.h FLATBUFFERS_HAS_STRTOF_L)
+    check_cxx_symbol_exists(strtoull_l stdlib.h FLATBUFFERS_HAS_STRTOULL_L)
+  endif()
+  if(FLATBUFFERS_HAS_STRTOF_L AND FLATBUFFERS_HAS_STRTOULL_L)
+    set(FLATBUFFERS_LOCALE_INDEPENDENT 1)
   endif()
 endif()
 add_definitions(-DFLATBUFFERS_LOCALE_INDEPENDENT=$<BOOL:${FLATBUFFERS_LOCALE_INDEPENDENT}>)
@@ -135,6 +147,8 @@ set(FlatBuffers_Sample_BFBS_SRCS
 set(FlatBuffers_GRPCTest_SRCS
   include/flatbuffers/flatbuffers.h
   include/flatbuffers/grpc.h
+  include/flatbuffers/util.h
+  src/util.cpp
   tests/monster_test.grpc.fb.h
   tests/test_assert.h
   tests/test_builder.h
@@ -153,6 +167,7 @@ set(FlatBuffers_GRPCTest_SRCS
 if(EXISTS "${CMAKE_TOOLCHAIN_FILE}")
   # do not apply any global settings if the toolchain
   # is being configured externally
+  message(STATUS "Using toolchain file: ${CMAKE_TOOLCHAIN_FILE}.")
 elseif(APPLE)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -stdlib=libc++")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -pedantic -Werror -Wextra -Wno-unused-parameter")
@@ -186,6 +201,9 @@ elseif(${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
   set(CMAKE_CXX_FLAGS
       "${CMAKE_CXX_FLAGS} -std=c++0x -Wall -pedantic -Werror -Wextra -Wno-unused-parameter")
   set(FLATBUFFERS_PRIVATE_CXX_FLAGS "-Wold-style-cast")
+  if(NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 3.8)
+    list(APPEND FLATBUFFERS_PRIVATE_CXX_FLAGS "-Wimplicit-fallthrough" "-Wextra-semi" "-Werror=unused-private-field") # enable warning
+  endif()
   if(FLATBUFFERS_LIBCXX_WITH_CLANG)
     if(NOT "${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
       set(CMAKE_CXX_FLAGS
@@ -256,7 +274,7 @@ endif()
 if(FLATBUFFERS_BUILD_FLATC)
   add_executable(flatc ${FlatBuffers_Compiler_SRCS})
   target_compile_options(flatc PRIVATE "${FLATBUFFERS_PRIVATE_CXX_FLAGS}")
-  if(FLATBUFFERS_CODE_SANITIZE)
+  if(FLATBUFFERS_CODE_SANITIZE AND NOT WIN32)
     add_fsanitize_to_target(flatc ${FLATBUFFERS_CODE_SANITIZE})
   endif()
   if(NOT FLATBUFFERS_FLATC_EXECUTABLE)
@@ -280,7 +298,7 @@ if(FLATBUFFERS_BUILD_SHAREDLIB)
   # - minor updated when there are additions in API/ABI
   # - major (ABI number) updated when there are changes in ABI (or removals)
   set(FlatBuffers_Library_SONAME_MAJOR "1")
-  set(FlatBuffers_Library_SONAME_FULL "${FlatBuffers_Library_SONAME_MAJOR}.10.0")
+  set(FlatBuffers_Library_SONAME_FULL "${FlatBuffers_Library_SONAME_MAJOR}.11.0")
   set_target_properties(flatbuffers_shared PROPERTIES OUTPUT_NAME flatbuffers
                         SOVERSION "${FlatBuffers_Library_SONAME_MAJOR}"
                         VERSION "${FlatBuffers_Library_SONAME_FULL}")
@@ -314,12 +332,17 @@ if(FLATBUFFERS_BUILD_TESTS)
   compile_flatbuffers_schema_to_cpp(tests/monster_test.fbs)
   include_directories(${CMAKE_CURRENT_BINARY_DIR}/tests)
   add_executable(flattests ${FlatBuffers_Tests_SRCS})
-  if(FLATBUFFERS_CODE_SANITIZE)
-    add_fsanitize_to_target(flattests ${FLATBUFFERS_CODE_SANITIZE})
-  endif()
   set_property(TARGET flattests
     PROPERTY COMPILE_DEFINITIONS FLATBUFFERS_TRACK_VERIFIER_BUFFER_SIZE
     FLATBUFFERS_DEBUG_VERIFICATION_FAILURE=1)
+  if(FLATBUFFERS_CODE_SANITIZE)
+    if(WIN32)
+      target_compile_definitions(flattests PRIVATE FLATBUFFERS_MEMORY_LEAK_TRACKING)
+      message(STATUS "Sanitizer MSVC::_CrtDumpMemoryLeaks added to flattests")
+    else()
+      add_fsanitize_to_target(flattests ${FLATBUFFERS_CODE_SANITIZE})
+    endif()
+  endif()
 
   compile_flatbuffers_schema_to_cpp(samples/monster.fbs)
   include_directories(${CMAKE_CURRENT_BINARY_DIR}/samples)
@@ -385,7 +408,6 @@ if(FLATBUFFERS_INSTALL)
     install(
       TARGETS flatc EXPORT FlatcTargets
       RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-      CONFIGURATIONS Release
     )
 
     install(
@@ -393,7 +415,6 @@ if(FLATBUFFERS_INSTALL)
       FILE FlatcTargets.cmake
       NAMESPACE flatbuffers::
       DESTINATION ${FB_CMAKE_DIR}
-      CONFIGURATIONS Release
     )
   endif()
 
@@ -437,6 +458,13 @@ endif()
 
 include(CMake/BuildFlatBuffers.cmake)
 
-if(FLATBUFFERS_PACKAGE_DEBIAN)
-    include(CMake/PackageDebian.cmake)
+if(UNIX)
+    # Use of CPack only supported on Linux systems.
+    if(FLATBUFFERS_PACKAGE_DEBIAN)
+        include(CMake/PackageDebian.cmake)
+    endif()
+    if (FLATBUFFERS_PACKAGE_REDHAT)
+        include(CMake/PackageRedhat.cmake)
+    endif()
+    include(CPack)
 endif()

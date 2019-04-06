@@ -13,7 +13,7 @@ public struct TypeAliases : IFlatbufferObject
   private Table __p;
   public ByteBuffer ByteBuffer { get { return __p.bb; } }
   public static TypeAliases GetRootAsTypeAliases(ByteBuffer _bb) { return GetRootAsTypeAliases(_bb, new TypeAliases()); }
-  public static TypeAliases GetRootAsTypeAliases(ByteBuffer _bb, TypeAliases obj) { return (obj.__assign(_bb.GetInt(_bb.Position) + _bb.Position, _bb)); }
+  public static TypeAliases GetRootAsTypeAliases(ByteBuffer _bb, TypeAliases obj) { FlatBufferConstants.FLATBUFFERS_1_11_1(); return (obj.__assign(_bb.GetInt(_bb.Position) + _bb.Position, _bb)); }
   public void __init(int _i, ByteBuffer _bb) { __p.bb_pos = _i; __p.bb = _bb; }
   public TypeAliases __assign(int _i, ByteBuffer _bb) { __init(_i, _bb); return this; }
 
@@ -69,7 +69,7 @@ public struct TypeAliases : IFlatbufferObject
       double f64 = 0.0,
       VectorOffset v8Offset = default(VectorOffset),
       VectorOffset vf64Offset = default(VectorOffset)) {
-    builder.StartObject(12);
+    builder.StartTable(12);
     TypeAliases.AddF64(builder, f64);
     TypeAliases.AddU64(builder, u64);
     TypeAliases.AddI64(builder, i64);
@@ -85,7 +85,7 @@ public struct TypeAliases : IFlatbufferObject
     return TypeAliases.EndTypeAliases(builder);
   }
 
-  public static void StartTypeAliases(FlatBufferBuilder builder) { builder.StartObject(12); }
+  public static void StartTypeAliases(FlatBufferBuilder builder) { builder.StartTable(12); }
   public static void AddI8(FlatBufferBuilder builder, sbyte i8) { builder.AddSbyte(0, i8, 0); }
   public static void AddU8(FlatBufferBuilder builder, byte u8) { builder.AddByte(1, u8, 0); }
   public static void AddI16(FlatBufferBuilder builder, short i16) { builder.AddShort(2, i16, 0); }
@@ -105,7 +105,7 @@ public struct TypeAliases : IFlatbufferObject
   public static VectorOffset CreateVf64VectorBlock(FlatBufferBuilder builder, double[] data) { builder.StartVector(8, data.Length, 8); builder.Add(data); return builder.EndVector(); }
   public static void StartVf64Vector(FlatBufferBuilder builder, int numElems) { builder.StartVector(8, numElems, 8); }
   public static Offset<TypeAliases> EndTypeAliases(FlatBufferBuilder builder) {
-    int o = builder.EndObject();
+    int o = builder.EndTable();
     return new Offset<TypeAliases>(o);
   }
 };

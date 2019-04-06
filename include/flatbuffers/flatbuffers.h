@@ -116,6 +116,7 @@ template<typename T, typename IT> struct VectorIterator {
   VectorIterator(const uint8_t *data, uoffset_t i)
       : data_(data + IndirectHelper<T>::element_stride * i) {}
   VectorIterator(const VectorIterator &other) : data_(other.data_) {}
+  VectorIterator() : data_(nullptr) {}
 
   VectorIterator &operator=(const VectorIterator &other) {
     data_ = other.data_;
@@ -183,7 +184,7 @@ template<typename T, typename IT> struct VectorIterator {
     return temp;
   }
 
-  VectorIterator operator-(const uoffset_t &offset) {
+  VectorIterator operator-(const uoffset_t &offset) const {
     return VectorIterator(data_ - offset * IndirectHelper<T>::element_stride,
                           0);
   }
@@ -197,6 +198,21 @@ template<typename T, typename IT> struct VectorIterator {
   const uint8_t *data_;
 };
 
+template<typename Iterator> struct VectorReverseIterator :
+  public std::reverse_iterator<Iterator> {
+
+  explicit VectorReverseIterator(Iterator iter) :
+    std::reverse_iterator<Iterator>(iter) {}
+
+  typename Iterator::value_type operator*() const {
+    return *(std::reverse_iterator<Iterator>::current);
+  }
+
+  typename Iterator::value_type operator->() const {
+    return *(std::reverse_iterator<Iterator>::current);
+  }
+};
+
 struct String;
 
 // This is used as a helper type for accessing vectors.
@@ -207,6 +223,8 @@ template<typename T> class Vector {
       iterator;
   typedef VectorIterator<T, typename IndirectHelper<T>::return_type>
       const_iterator;
+  typedef VectorReverseIterator<iterator> reverse_iterator;
+  typedef VectorReverseIterator<const_iterator> const_reverse_iterator;
 
   uoffset_t size() const { return EndianScalar(length_); }
 
@@ -252,6 +270,20 @@ template<typename T> class Vector {
 
   iterator end() { return iterator(Data(), size()); }
   const_iterator end() const { return const_iterator(Data(), size()); }
+
+  reverse_iterator rbegin() { return reverse_iterator(end() - 1); }
+  const_reverse_iterator rbegin() const { return const_reverse_iterator(end() - 1); }
+
+  reverse_iterator rend() { return reverse_iterator(begin() - 1); }
+  const_reverse_iterator rend() const { return const_reverse_iterator(begin() - 1); }
+
+  const_iterator cbegin() const { return begin(); }
+
+  const_iterator cend() const { return end(); }
+
+  const_reverse_iterator crbegin() const { return rbegin(); }
+
+  const_reverse_iterator crend() const { return rend(); }
 
   // Change elements if you have a non-const pointer to this object.
   // Scalars only. See reflection.h, and the documentation.
@@ -360,7 +392,7 @@ const Vector<Offset<T>> *VectorCast(const Vector<Offset<U>> *ptr) {
 // Convenient helper function to get the length of any vector, regardless
 // of whether it is null or not (the field is not set).
 template<typename T> static inline size_t VectorLength(const Vector<T> *v) {
-  return v ? v->Length() : 0;
+  return v ? v->size() : 0;
 }
 
 // Lexicographically compare two strings (possibly containing nulls), and
@@ -373,12 +405,12 @@ static inline bool StringLessThan(const char *a_data, uoffset_t a_size,
 
 struct String : public Vector<char> {
   const char *c_str() const { return reinterpret_cast<const char *>(Data()); }
-  std::string str() const { return std::string(c_str(), Length()); }
+  std::string str() const { return std::string(c_str(), size()); }
 
   // clang-format off
   #ifdef FLATBUFFERS_HAS_STRING_VIEW
   flatbuffers::string_view string_view() const {
-    return flatbuffers::string_view(c_str(), Length());
+    return flatbuffers::string_view(c_str(), size());
   }
   #endif // FLATBUFFERS_HAS_STRING_VIEW
   // clang-format on
@@ -860,10 +892,16 @@ inline voffset_t FieldIndexToOffset(voffset_t field_id) {
 
 template<typename T, typename Alloc>
 const T *data(const std::vector<T, Alloc> &v) {
-  return v.empty() ? nullptr : &v.front();
+  // Eventually the returned pointer gets passed down to memcpy, so
+  // we need it to be non-null to avoid undefined behavior.
+  static uint8_t t;
+  return v.empty() ? reinterpret_cast<const T*>(&t) : &v.front();
 }
 template<typename T, typename Alloc> T *data(std::vector<T, Alloc> &v) {
-  return v.empty() ? nullptr : &v.front();
+  // Eventually the returned pointer gets passed down to memcpy, so
+  // we need it to be non-null to avoid undefined behavior.
+  static uint8_t t;
+  return v.empty() ? reinterpret_cast<T*>(&t) : &v.front();
 }
 
 /// @endcond
@@ -1310,7 +1348,7 @@ class FlatBufferBuilder {
   /// @param[in] str A const pointer to a `String` struct to add to the buffer.
   /// @return Returns the offset in the buffer where the string starts
   Offset<String> CreateString(const String *str) {
-    return str ? CreateString(str->c_str(), str->Length()) : 0;
+    return str ? CreateString(str->c_str(), str->size()) : 0;
   }
 
   /// @brief Store a string in the buffer, which can contain any binary data.
@@ -1370,7 +1408,7 @@ class FlatBufferBuilder {
   /// @param[in] str A const pointer to a `String` struct to add to the buffer.
   /// @return Returns the offset in the buffer where the string starts
   Offset<String> CreateSharedString(const String *str) {
-    return CreateSharedString(str->c_str(), str->Length());
+    return CreateSharedString(str->c_str(), str->size());
   }
 
   /// @cond FLATBUFFERS_INTERNAL
@@ -1947,13 +1985,9 @@ class Verifier FLATBUFFERS_FINAL_CLASS {
         depth_(0),
         max_depth_(_max_depth),
         num_tables_(0),
-        max_tables_(_max_tables)
-  // clang-format off
-    #ifdef FLATBUFFERS_TRACK_VERIFIER_BUFFER_SIZE
-        , upper_bound_(0)
-    #endif
-        , check_alignment_(_check_alignment)
-  // clang-format on
+        max_tables_(_max_tables),
+        upper_bound_(0),
+        check_alignment_(_check_alignment)
   {
     FLATBUFFERS_ASSERT(size_ < FLATBUFFERS_MAX_BUFFER_SIZE);
   }
@@ -2144,17 +2178,22 @@ class Verifier FLATBUFFERS_FINAL_CLASS {
     return true;
   }
 
-  // clang-format off
-  #ifdef FLATBUFFERS_TRACK_VERIFIER_BUFFER_SIZE
   // Returns the message size in bytes
   size_t GetComputedSize() const {
-    uintptr_t size = upper_bound_;
-    // Align the size to uoffset_t
-    size = (size - 1 + sizeof(uoffset_t)) & ~(sizeof(uoffset_t) - 1);
-    return (size > size_) ?  0 : size;
+    // clang-format off
+    #ifdef FLATBUFFERS_TRACK_VERIFIER_BUFFER_SIZE
+      uintptr_t size = upper_bound_;
+      // Align the size to uoffset_t
+      size = (size - 1 + sizeof(uoffset_t)) & ~(sizeof(uoffset_t) - 1);
+      return (size > size_) ?  0 : size;
+    #else
+      // Must turn on FLATBUFFERS_TRACK_VERIFIER_BUFFER_SIZE for this to work.
+      (void)upper_bound_;
+      FLATBUFFERS_ASSERT(false);
+      return 0;
+    #endif
+    // clang-format on
   }
-  #endif
-  // clang-format on
 
  private:
   const uint8_t *buf_;
@@ -2163,11 +2202,7 @@ class Verifier FLATBUFFERS_FINAL_CLASS {
   uoffset_t max_depth_;
   uoffset_t num_tables_;
   uoffset_t max_tables_;
-  // clang-format off
-  #ifdef FLATBUFFERS_TRACK_VERIFIER_BUFFER_SIZE
-    mutable size_t upper_bound_;
-  #endif
-  // clang-format on
+  mutable size_t upper_bound_;
   bool check_alignment_;
 };
 
@@ -2441,12 +2476,12 @@ inline int LookupEnum(const char **names, const char *name) {
 // clang-format off
 #if defined(_MSC_VER)
   #define FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(alignment) \
-    __pragma(pack(1)); \
+    __pragma(pack(1)) \
     struct __declspec(align(alignment))
   #define FLATBUFFERS_STRUCT_END(name, size) \
-    __pragma(pack()); \
+    __pragma(pack()) \
     static_assert(sizeof(name) == size, "compiler breaks packing rules")
-#elif defined(__GNUC__) || defined(__clang__)
+#elif defined(__GNUC__) || defined(__clang__) || defined(__ICCARM__)
   #define FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(alignment) \
     _Pragma("pack(1)") \
     struct __attribute__((aligned(alignment)))
