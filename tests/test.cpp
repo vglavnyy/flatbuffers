@@ -2571,24 +2571,24 @@ void JsonBase64Test() {
     "}\n"
     "root_type TestBase64;"
     "file_identifier \"B64T\";";
-  const auto reference_array = "{"
+  const std::string reference_array = "{"
     "base64: [247,208,63,251,129,52,179,220,24,249,42],"
     "base64url: [247,208,63,251,129,52,179,220,24,249,42]"
     "}";
   // expected result, with mandatory padding after encoding
-  const auto reference_base64 = "{"
+  const std::string reference_base64 = "{"
     "base64: \"99A/+4E0s9wY+So=\","
     "base64url: \"99A_-4E0s9wY-So=\""
     "}";
   // urldata without padding
-  const auto reference_base64_wo_pad = "{"
+  const std::string reference_base64_wo_pad = "{"
     "base64: \"99A/+4E0s9wY+So=\","
     "base64url: \"99A_-4E0s9wY-So\""
     "}";
   // clang-format on
 
   // Decode->Encode->Compare.
-  auto DecEnc = [&base64_schema](const char *json, bool cancel_pad = false) {
+  auto DecEnc = [&base64_schema](const std::string &json, bool cancel_pad) {
     flatbuffers::Parser parser;
     // use compact form of json
     parser.opts.indent_step = -1;
@@ -2596,7 +2596,7 @@ void JsonBase64Test() {
 
     TEST_EQ(parser.Parse(base64_schema), true);
     // Parse input json.
-    TEST_EQ(parser.Parse(json), true);
+    TEST_EQ(parser.Parse(json.c_str()), true);
     // Generate new text.
     std::string text;
     auto done = flatbuffers::GenerateText(
@@ -2606,21 +2606,19 @@ void JsonBase64Test() {
   };
 
   // Check reference to himself.
-  TEST_EQ_STR(DecEnc(reference_base64).c_str(), reference_base64);
+  TEST_EQ(DecEnc(reference_base64, false), reference_base64);
   // Check encoding for an ordinal (non-base64) array.
-  TEST_EQ_STR(DecEnc(reference_array).c_str(), reference_base64);
+  TEST_EQ(DecEnc(reference_array, false), reference_base64);
   // Input strings without padding.
-  TEST_EQ_STR(
-      DecEnc("{base64:\"99A/+4E0s9wY+So\",base64url:\"99A_-4E0s9wY-So\"}")
-          .c_str(),
-      reference_base64);
+  TEST_EQ(DecEnc("{base64:\"99A/+4E0s9wY+So\",base64url:\"99A_-4E0s9wY-So\"}",
+                 false),
+          reference_base64);
   // URL-safe decoder should accepts standard base64 string.
-  TEST_EQ_STR(
-      DecEnc("{base64:\"99A/+4E0s9wY+So=\",base64url:\"99A/+4E0s9wY+So=\"}")
-          .c_str(),
-      reference_base64);
+  TEST_EQ(DecEnc("{base64:\"99A/+4E0s9wY+So=\",base64url:\"99A/+4E0s9wY+So=\"}",
+                 false),
+          reference_base64);
   // Cancel padding for url-safe encoder.
-  TEST_EQ_STR(DecEnc(reference_array, true).c_str(), reference_base64_wo_pad);
+  TEST_EQ(DecEnc(reference_array, true), reference_base64_wo_pad);
 
   // Test encode-decode with auto-generated sequences.
   flatbuffers::Parser ordinal_parser;
@@ -2635,7 +2633,7 @@ void JsonBase64Test() {
   for (auto cancel_pad = 0; cancel_pad < 2; cancel_pad++) {
     base64_parser.opts.base64_cancel_padding = !!(cancel_pad % 2);
     // Tests at different lengths.
-    for (size_t pass_indx = 0; pass_indx < 65; pass_indx += 3) {
+    for (size_t pass_indx = 0; pass_indx < 45; pass_indx += 1) {
       // Generate variable length array.
       const auto M = pass_indx + 1;
       // Generate a binary data.
@@ -2644,7 +2642,7 @@ void JsonBase64Test() {
       for (size_t j = 0; j < M; j++) {
         if (j) bin_text += ',';
         auto v = static_cast<uint8_t>((pass_indx + j) % 0x100);
-        bin_text += std::to_string(v);
+        bin_text += flatbuffers::NumToString(v);
       }
       bin_text += ']';
       const std::string bin_json =
@@ -2895,7 +2893,7 @@ int main(int /*argc*/, const char * /*argv*/ []) {
   FlatBufferTests();
   FlatBufferBuilderTest();
 
-  if (!true) {
+  if (true) {
     const char b64set[64 + 1] =
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
@@ -2904,8 +2902,8 @@ int main(int /*argc*/, const char * /*argv*/ []) {
         "root_type TestBase64;"
         "file_identifier \"B64T\";";
 
-    size_t RN = 2000;
-    size_t NN = 1024 * 1024;
+    size_t RN = 1000;
+    size_t NN = 1024 * 128;
 
     NN = NN * 4;
     std::string b64image = "{X: \"";

@@ -1,4 +1,4 @@
-﻿#ifndef FLATBUFFERS_UTIL_BASE64_H_
+#ifndef FLATBUFFERS_UTIL_BASE64_H_
 #define FLATBUFFERS_UTIL_BASE64_H_
 
 #include "flatbuffers/idl.h"
@@ -17,13 +17,13 @@ namespace flatbuffers {
 //    urldata: "99A_-4E0s9wY-So="
 // }
 //
-// Field attribute [ubyte](base64): accepts standard RFC4648 alphabet.
+// Field with attribute [ubyte](base64): accepts standard RFC4648 alphabet.
 // The padding is optional for the decoder.
 // Valid input strings: {"/43+AergFA==", "/43+AergFA"}.
 // The encoder output will have a padding if it is required:
 // [255, 141, 254, 1, 234, 224, 20] encoded to "/43+AergFA==".
 //
-// Field attribute [ubyte](base64url): RFC4648 with URL Safe Alphabet.
+// Field with attribute [ubyte](base64url): RFC4648 with URL Safe Alphabet.
 // The padding is optional for the decoder.
 // The decoder accepts both alphabets: UrlSafe and Standard.
 // Valid input strings:
@@ -56,7 +56,7 @@ enum kBase64Mode {
 };
 
 // Map a field attribute to kBase64Mode enum.
-static inline kBase64Mode GetBase64Mode(const FieldDef *fd) {
+inline kBase64Mode GetBase64Mode(const FieldDef *fd) {
   FLATBUFFERS_ASSERT(fd);
   if (fd->attributes.Lookup("base64url"))
     return kBase64ModeUrlSafe;
@@ -67,7 +67,7 @@ static inline kBase64Mode GetBase64Mode(const FieldDef *fd) {
 }
 
 // Check that field is a base64 field.
-static inline bool IsBase64(const FieldDef *fd) {
+inline bool IsBase64(const FieldDef *fd) {
   return fd && (BASE_TYPE_VECTOR == fd->value.type.base_type) &&
          (BASE_TYPE_UCHAR == fd->value.type.element) &&
          (kBase64ModeNotSet != GetBase64Mode(fd));

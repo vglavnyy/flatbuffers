@@ -391,7 +391,7 @@ CheckedError Parser::Next() {
             !ValidateUTF8(attribute_)) {
           return Error("illegal UTF-8 sequence");
         }
-        token_ = kTokenStringConstant;
+        token_ = kTokenStringConstant; // '' or "" quoted string
         return NoError();
       }
       case '/':
@@ -838,9 +838,10 @@ CheckedError Parser::ParseField(StructDef &struct_def) {
 }
 
 CheckedError Parser::ParseString(Value &val) {
-  auto s = attribute_;
+  uoffset_t ofs =
+      Is(kTokenStringConstant) ? builder_.CreateString(attribute_).o : 0;
   EXPECT(kTokenStringConstant);
-  val.constant = NumToString(builder_.CreateString(s).o);
+  val.constant = NumToString(ofs);
   return NoError();
 }
 
