@@ -1,0 +1,160 @@
+namespace MyGame;
+
+// Test pack of enums.
+// 1. Check the parser
+// 2. Check cpp code-generator
+
+// Valid empty enums
+enum ME_I8  : int8   {}
+enum ME_U8  : uint8  {}
+enum ME_I16 : int16  {}
+enum ME_U16 : uint16 {}
+enum ME_I32 : int32  {}
+enum ME_U32 : uint32 {}
+enum ME_I64 : int64  {}
+enum ME_U64 : uint64 {}
+
+// Unsigned enums with bit_flags.
+
+///DOC: ALL_FLAGS = 13835058055282164099ULL
+enum MEFU64_V0 : uint64 (bit_flags) {
+  /// 1ULL
+  F00,
+  /// 2ULL
+  F01,
+  /// 128ULL
+  F07 =  7,
+  /// 256ULL
+  F08,
+  /// 4611686018427387904ULL
+  F62 = 62,
+  /// 9223372036854775808ULL
+  F63
+}
+
+///DOC: ALL_FLAGS = 0xFFFFFFFFFFFFFFFF
+enum MEFU64_V1 : uint64 (bit_flags) {
+  F00, F01, F02, F03, F04, F05, F06, F07, F08, F09,
+  F10, F11, F12, F13, F14, F15, F16, F17, F18, F19,
+  F20, F21, F22, F23, F24, F25, F26, F27, F28, F29,
+  F30, F31, F32, F33, F34, F35, F36, F37, F38, F39,
+  F40, F41, F42, F43, F44, F45, F46, F47, F48, F49,
+  F50, F51, F52, F53, F54, F55, F56, F57, F58, F59,
+  F60, F61, F62, F63
+}
+
+///DOC: ALL_FLAGS = 49539U
+enum MEFU16_V0 : uint16 (bit_flags) {
+  F00,        // 1U
+  F01,        // 2U
+  F07 = 7,    // 128U
+  F08,        // 256U
+  F14 = 14,   // 16384U
+  F15         // 32768U
+}
+
+// Common enums
+
+enum MECI8_V0 : int8 {
+  dn = -128,
+  dn_p1, // -127
+  none = -1,
+  zero = 0,
+  one,
+  up = 127
+}
+
+enum MECU8_V0 : uint8 {
+  dn,
+  one,
+  up = 255
+}
+
+enum MECI16_V0 : int16 {
+  dn = -32768,
+  none = -1,
+  zero = 0,
+  one,
+  up = 32767
+}
+
+enum MECU16_V0 : uint16 {
+  dn,
+  one,
+  up = 65535
+}
+
+enum MECI32_V0 : int32 {
+  dn = -2147483648,
+  none = -1,
+  zero = 0,
+  one,
+  up = 2147483647
+}
+
+enum MECU32_V0 : uint32 {
+  dn,
+  one,
+  up = 4294967295
+}
+
+enum MECI64_V0 : int64 {
+  dn = -9223372036854775808,
+  dn_p1, // -9223372036854775807
+  none = -1,
+  zero = 0,
+  one,
+  up = 9223372036854775807
+}
+
+enum MECU64_V0 : uint64 {
+  dn,
+  one,
+  up = 18446744073709551615
+}
+
+// #5108
+enum MerchantCanChanged : byte { x= 1, y, z, v, s}
+
+table MonsterEnumTest {
+  // Test code-generator with scalars (C++ requires LL/ULL suffixes).
+  int8_min  : int8  = -128;
+  int8_max  : int8  =  127;
+  int16_min : int16 = -32768;
+  int16_max : int16 =  32767;
+  int32_min : int32 = -2147483648;
+  int32_max : int32 =  2147483647;
+  int64_min : int64 = -9223372036854775808;
+  int64_max : int64 =  9223372036854775807;
+
+  uint8_max  : uint8  =  255;
+  uint16_max : uint16 =  65535;
+  uint32_max : uint32 =  4294967295;
+  uint64_max : uint64 =  18446744073709551615;
+  // Empty enum allowed by the grammar.
+  empty_i8  : ME_I8;
+  empty_u8  : ME_U8;
+  empty_i16 : ME_I16;
+  empty_u16 : ME_U16;
+  empty_i32 : ME_I32;
+  empty_u32 : ME_U32;
+  empty_i64 : ME_I64;
+  empty_u64 : ME_U64;
+  // 64-bit flags
+  u64_ef : MEFU64_V0 = "F63 F07 F08";
+  // 64-bit common enums
+  u64_ec : MECU64_V0  = "dn one up";  // up
+  i64_ec1 : MECI64_V0 = "dn one";     // dn_p1
+  i64_ec2 : MECI64_V0 = "up one";     // up
+  // 64-bit mixing
+  u64 : uint64 = "MECU64_V0.one MEFU64_V0.F63";
+  i64 : int64  = "MECI64_V0.one MEFU64_V0.F07";
+  // 16-bit flags
+  u16_ef : MEFU16_V0 = "F15 F08";
+  // 8-bit common enums
+  u8_ec  : MECU8_V0 = "dn one up";    // up
+  i8_ec1 : MECI8_V0 = "dn one";       // dn_p1
+  i8_ec2 : MECI8_V0 = "zero one up";  // up
+  // #5108
+  fields_merchant_update:[MerchantCanChanged];
+}

@@ -38,6 +38,11 @@
 
 #include "flatbuffers/flexbuffers.h"
 
+// MSVC2010 has problems with int64/uint64 enums.
+#if (!defined(_MSC_VER) || (_MSC_VER >= 1800))
+#  include "monster_enum_generated.h"
+#endif
+
 using namespace MyGame::Example;
 
 void FlatBufferBuilderTest();
@@ -1476,6 +1481,62 @@ void EnumValueTest() {
   TEST_EQ(TestValue<int>("{ Y:7 }", "E", "enum E:int { V = 0 }"), 7);
 }
 
+#ifdef FLATBUFFERS_GENERATED_MONSTERENUM_MYGAME_H_
+void EnumMonsterTest() {
+  using namespace MyGame;
+  // Ensure that generated "monster_enum_generated.h" is correct.
+  flatbuffers::FlatBufferBuilder fbb;
+  fbb.Finish(CreateMonsterEnumTest(fbb));
+  auto p = fbb.GetBufferPointer();
+  auto _mt = flatbuffers::GetRoot<MonsterEnumTest>(p);
+  TEST_NOTNULL(_mt);
+  const auto &mt = *_mt;
+  // Check default values of MonsterEnumTest table.
+  TEST_EQ(mt.int8_min(), -128);
+  TEST_EQ(mt.int8_max(), 127);
+  TEST_EQ(mt.uint8_max(), 255);
+  TEST_EQ(mt.int16_min(), -32768);
+  TEST_EQ(mt.int16_max(), 32767);
+  TEST_EQ(mt.uint16_max(), 65535);
+  TEST_EQ(mt.int32_min() + 1, -2147483647);
+  TEST_EQ(mt.int32_max(), 2147483647);
+  TEST_EQ(mt.uint32_max(), 4294967295);
+  TEST_EQ(mt.int64_min() + 1LL, -9223372036854775807LL);
+  TEST_EQ(mt.int64_max(), 9223372036854775807LL);
+  TEST_EQ(mt.uint64_max(), 18446744073709551615ULL);
+  // 64-bit flags: "F63 F07 F08"
+  TEST_EQ(static_cast<uint64_t>(mt.u64_ef()), 0x8000000000000180ULL);
+  // 64-bit common enums
+  // MECU64_V0 "dn one up" = MECU64_V0.up
+  TEST_EQ(static_cast<uint64_t>(mt.u64_ec()), 0xFFFFFFFFFFFFFFFFULL);
+  // MECI64_V0 "dn one" = MECI64_V0.dn_p1
+  TEST_EQ(static_cast<int64_t>(mt.i64_ec1()), -9223372036854775807LL);
+  // MECI64_V0 "up one" = MECI64_V0.up
+  TEST_EQ(static_cast<int64_t>(mt.i64_ec2()), 9223372036854775807LL);
+  // 64-bit mixing (integer inited by combination of enums)
+  TEST_EQ(static_cast<uint64_t>(mt.u64()), 0x8000000000000001ULL);
+  TEST_EQ(static_cast<int64_t>(mt.i64()), 129LL);
+  // 16-bit flags: "F15 F08"
+  TEST_EQ(static_cast<uint64_t>(mt.u16_ef()), 0x8100);
+  // 8-bit common enums
+  TEST_EQ(static_cast<uint64_t>(mt.u8_ec()), 0xFF);
+  TEST_EQ(static_cast<int64_t>(mt.i8_ec1()), -0x7F);
+  TEST_EQ(static_cast<int64_t>(mt.i8_ec2()), 0x7F);
+  // Check generated enums.
+  TEST_EQ(static_cast<uint64_t>(MEFU64_V0_ANY), 13835058055282164099ULL);
+  TEST_EQ(static_cast<uint64_t>(MEFU64_V1_ANY), 0xFFFFFFFFFFFFFFFFULL);
+  TEST_EQ(static_cast<uint64_t>(MEFU16_V0_ANY), 0xC183);
+  // Common enums
+  TEST_EQ(static_cast<int64_t>(MECI8_V0_dn_p1), -0x7F);
+  TEST_EQ(static_cast<int64_t>(MECI8_V0_one), 1);
+  TEST_EQ(static_cast<int64_t>(MECU8_V0_one), 1);
+  TEST_EQ(static_cast<int64_t>(MECI8_V0_dn_p1), -0x7F);
+  TEST_EQ(static_cast<int64_t>(MECI8_V0_one), 1);
+}
+#else
+void EnumMonsterTest() { TEST_OUTPUT_LINE("Warning: skip EnumMonsterTest()") }
+#endif
+
 void IntegerOutOfRangeTest() {
   TestError("table T { F:byte; } root_type T; { F:128 }",
             "constant does not fit");
@@ -2663,6 +2724,7 @@ int FlatBufferTests() {
   EnumStringsTest();
   EnumNamesTest();
   EnumOutOfRangeTest();
+  EnumMonsterTest();
   IntegerOutOfRangeTest();
   IntegerBoundaryTest();
   UnicodeTest();
