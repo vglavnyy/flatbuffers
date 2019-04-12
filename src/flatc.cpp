@@ -32,6 +32,8 @@ void FlatCompiler::ParseFile(
   if (!parser.Parse(contents.c_str(), &include_directories[0],
                     filename.c_str()))
     Error(parser.error_, false, false);
+  if(!parser.error_.empty())
+    Warn(parser.error_, false);
   include_directories.pop_back();
   include_directories.pop_back();
 }
