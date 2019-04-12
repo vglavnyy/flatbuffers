@@ -24,7 +24,7 @@ inline const ME_I8 (&EnumValuesME_I8())[1] {
 }
 
 inline const char * const *EnumNamesME_I8() {
-  static const char * const names[] = {
+  static const char * const names[2] = {
     "NONE",
     nullptr
   };
@@ -51,7 +51,7 @@ inline const ME_U8 (&EnumValuesME_U8())[1] {
 }
 
 inline const char * const *EnumNamesME_U8() {
-  static const char * const names[] = {
+  static const char * const names[2] = {
     "NONE",
     nullptr
   };
@@ -78,7 +78,7 @@ inline const ME_I16 (&EnumValuesME_I16())[1] {
 }
 
 inline const char * const *EnumNamesME_I16() {
-  static const char * const names[] = {
+  static const char * const names[2] = {
     "NONE",
     nullptr
   };
@@ -105,7 +105,7 @@ inline const ME_U16 (&EnumValuesME_U16())[1] {
 }
 
 inline const char * const *EnumNamesME_U16() {
-  static const char * const names[] = {
+  static const char * const names[2] = {
     "NONE",
     nullptr
   };
@@ -132,7 +132,7 @@ inline const ME_I32 (&EnumValuesME_I32())[1] {
 }
 
 inline const char * const *EnumNamesME_I32() {
-  static const char * const names[] = {
+  static const char * const names[2] = {
     "NONE",
     nullptr
   };
@@ -159,7 +159,7 @@ inline const ME_U32 (&EnumValuesME_U32())[1] {
 }
 
 inline const char * const *EnumNamesME_U32() {
-  static const char * const names[] = {
+  static const char * const names[2] = {
     "NONE",
     nullptr
   };
@@ -186,7 +186,7 @@ inline const ME_I64 (&EnumValuesME_I64())[1] {
 }
 
 inline const char * const *EnumNamesME_I64() {
-  static const char * const names[] = {
+  static const char * const names[2] = {
     "NONE",
     nullptr
   };
@@ -213,7 +213,7 @@ inline const ME_U64 (&EnumValuesME_U64())[1] {
 }
 
 inline const char * const *EnumNamesME_U64() {
-  static const char * const names[] = {
+  static const char * const names[2] = {
     "NONE",
     nullptr
   };
@@ -774,7 +774,7 @@ inline const MerchantCanChanged (&EnumValuesMerchantCanChanged())[5] {
 }
 
 inline const char * const *EnumNamesMerchantCanChanged() {
-  static const char * const names[] = {
+  static const char * const names[6] = {
     "x",
     "y",
     "z",
