@@ -283,12 +283,20 @@ CheckedError Parser::Next() {
       case '\"':
       case '\'': {
         int unicode_high_surrogate = -1;
-
+        int ascii_sum = 0;
+        auto cursor_start = cursor_;
         while (*cursor_ != c) {
-          if (*cursor_ < ' ' && static_cast<signed char>(*cursor_) >= 0)
-            return Error("illegal character in string constant");
-          if (*cursor_ == '\\') {
-            attr_is_trivial_ascii_string_ = false;  // has escape sequence
+          if (*cursor_ != '\\') { // most likely
+            const auto u = static_cast<unsigned char>(*cursor_);
+            cursor_++;
+            ascii_sum |= (static_cast<int>('~') - u);
+            // Reject controls.
+            if (u < static_cast<unsigned char>(' '))
+              return Error("illegal character in string constant");
+          } else {
+            ascii_sum = -1;  // has escape sequence
+            if(cursor_start != cursor_)
+              attribute_.append(cursor_start, cursor_); // flush observed
             cursor_++;
             if (unicode_high_surrogate != -1 && *cursor_ != 'u') {
               return Error(
@@ -347,7 +355,11 @@ CheckedError Parser::Next() {
                     return Error(
                         "illegal Unicode sequence (multiple high surrogates)");
                   } else {
+                    // never overflow [0xD800, 0xDBFF]
                     unicode_high_surrogate = static_cast<int>(val);
+                    if (*cursor_ != '\\')
+                      return Error(
+                          "illegal Unicode sequence (unpaired high surrogate)");
                   }
                 } else if (val >= 0xDC00 && val <= 0xDFFF) {
                   if (unicode_high_surrogate == -1) {
@@ -371,26 +383,18 @@ CheckedError Parser::Next() {
               }
               default: return Error("unknown escape code in string constant");
             }
-          } else {  // printable chars + UTF-8 bytes
-            if (unicode_high_surrogate != -1) {
-              return Error(
-                  "illegal Unicode sequence (unpaired high surrogate)");
-            }
-            // reset if non-printable
-            attr_is_trivial_ascii_string_ &= check_ascii_range(*cursor_, ' ', '~');
-
-            attribute_ += *cursor_++;
+            cursor_start = cursor_; // restart
           }
         }
-        if (unicode_high_surrogate != -1) {
-          return Error("illegal Unicode sequence (unpaired high surrogate)");
-        }
+        FLATBUFFERS_ASSERT(unicode_high_surrogate == -1);
+        attr_is_trivial_ascii_string_ = (ascii_sum > 0);
+        attribute_.append(cursor_start, cursor_);
         cursor_++;
         if (!attr_is_trivial_ascii_string_ && !opts.allow_non_utf8 &&
             !ValidateUTF8(attribute_)) {
           return Error("illegal UTF-8 sequence");
         }
-        token_ = kTokenStringConstant;
+        token_ = kTokenStringConstant; // '' or "" quoted string
         return NoError();
       }
       case '/':
