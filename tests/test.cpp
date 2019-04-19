@@ -13,7 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #include "flatbuffers/flatbuffers.h"
 #include "flatbuffers/idl.h"
 #include "flatbuffers/minireflect.h"
@@ -39,6 +38,7 @@
 #ifndef FLATBUFFERS_CPP98_STL
   #include <random>
 #endif
+#include <chrono>
 
 #include "flatbuffers/flexbuffers.h"
 
@@ -572,6 +572,19 @@ void ParseAndGenerateTextTest() {
                                         include_test_path.c_str(), nullptr };
   TEST_EQ(parser.Parse(schemafile.c_str(), include_directories), true);
   TEST_EQ(parser.Parse(jsonfile.c_str(), include_directories), true);
+
+  TEST_OUTPUT_LINE("#5295: GetRoot bencmark...");
+  auto monster_root = parser.builder_.GetBufferPointer();
+  const auto RN = 1000;
+  auto start = std::chrono::steady_clock::now();
+  for (auto k = RN; k > 0; k--) {
+    // PROBLEM #5295.
+    auto m = flatbuffers::GetRoot<MyGame::Example::Monster>(monster_root);
+    (void)m;
+  }
+  auto stop = std::chrono::steady_clock::now();
+  auto time = std::chrono::duration<double, std::nano>(stop - start).count() / (RN);
+  TEST_OUTPUT_LINE("GetRoot time [ns]: %f", time);
 
   // here, parser.builder_ contains a binary buffer that is the parsed data.
 
