@@ -34,6 +34,7 @@
 #include "namespace_test/namespace_test2_generated.h"
 #include "union_vector/union_vector_generated.h"
 #include "monster_extra_generated.h"
+#include "test_generated.h"
 #include "test_assert.h"
 
 #include "flatbuffers/flexbuffers.h"
@@ -2689,6 +2690,9 @@ int FlatBufferTests() {
   return 0;
 }
 
+namespace test {
+}  // namespace test
+
 int main(int /*argc*/, const char * /*argv*/ []) {
   InitTestEngine();
 
@@ -2706,6 +2710,12 @@ int main(int /*argc*/, const char * /*argv*/ []) {
 
   FlatBufferTests();
   FlatBufferBuilderTest();
+
+  flatbuffers::FlatBufferBuilder builder;
+  std::vector<test::Color> colors;
+  colors.push_back(test::Color::Red);
+  auto c = builder.CreateVector(colors);
+  builder.Finish(test::CreateColors(builder, c));
 
   if (!testing_fails) {
     TEST_OUTPUT_LINE("ALL TESTS PASSED");

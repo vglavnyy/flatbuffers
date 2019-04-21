@@ -1,0 +1,8 @@
+namespace test;
+
+enum Color : byte { Red , Green, Blue }
+table Colors {
+  color_values:[Color];
+}
+
+root_type Colors;
