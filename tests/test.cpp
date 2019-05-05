@@ -2763,21 +2763,28 @@ int main(int /*argc*/, const char * /*argv*/ []) {
   FlatBufferBuilderTest();
 
   TEST_OUTPUT_LINE("String parser benchmark");
-  size_t SN = 100;
-  size_t RN = 1000000;
+  size_t SL = 9;
+  size_t SN = 1000;
+  size_t RN = 1000;
   std::string schema =
-      "table X{x:string;}\n"
+      "table X{x:[string];}\n"
       "root_type X;"
       "file_identifier \"TEST\";\n"
       "file_extension \"mon\";";
-  std::string sample = "{ x:\"";
-  if(SN>0)
-    sample += std::string(SN, 'x');
-  sample += "\"}";
+  std::string sample = "{x:[\n";
+  if (SN > 0) {
+    for (auto k = SN; k > 0; k--) {
+      sample += "\"";
+      if (SL > 0)
+        sample += std::string(SL, 'x');
+      sample += "\",\n";
+    }
+  }
+  sample += "]}";
 
   flatbuffers::Parser parser;
   TEST_EQ(parser.Parse(schema.c_str()), true);
-  for (auto k = 0; k < 10; k++) {
+  for (auto k = 0; k < 2; k++) {
     TEST_EQ(parser.Parse(sample.c_str()), true);
   }
   auto json = sample.c_str();
@@ -2786,7 +2793,7 @@ int main(int /*argc*/, const char * /*argv*/ []) {
     parser.Parse(json);
   }
   auto stop = std::chrono::high_resolution_clock::now();
-  auto time = std::chrono::duration<double, std::nano>(stop - start).count() / (RN);
+  auto time = std::chrono::duration<double, std::nano>(stop - start).count() / (RN*SN*(SL?SL:1));
   TEST_OUTPUT_LINE("Test time [ns]: %f", time);
 
   if (!testing_fails) {
