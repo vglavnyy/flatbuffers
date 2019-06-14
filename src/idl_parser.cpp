@@ -1039,37 +1039,39 @@ CheckedError Parser::ParseTableDelimiters(size_t &fieldn,
                                           F body) {
   // We allow tables both as JSON object{ .. } with field names
   // or vector[..] with all fields in order
-  char terminator = '}';
-  bool is_nested_vector = struct_def && Is('[');
-  if (is_nested_vector) {
-    NEXT();
-    terminator = ']';
-  } else {
-    EXPECT('{');
-  }
-  for (;;) {
-    if ((!opts.strict_json || !fieldn) && Is(terminator)) break;
-    std::string name;
-    if (is_nested_vector) {
-      if (fieldn >= struct_def->fields.vec.size()) {
-        return Error("too many unnamed fields in nested array");
-      }
-      name = struct_def->fields.vec[fieldn]->name;
-    } else {
-      name = attribute_;
-      if (Is(kTokenStringConstant)) {
-        NEXT();
+  size_t nested_fieldn = 0;
+  const auto vec = (struct_def && Is('[')) ? &struct_def->fields.vec : nullptr;
+  const auto terminator = vec ? ']' : '}';
+  EXPECT(vec ? '[' : '{');
+  // Skip empty {} and [] objects.
+  if(false==Is(terminator)) {
+    for (;;) {
+      std::string name;
+      if (vec) {
+        FLATBUFFERS_ASSERT(nested_fieldn >= fieldn);
+        if (nested_fieldn >= vec->size()) {
+          return Error("too many unnamed fields in nested array");
+        }
+        name = (*vec)[nested_fieldn]->name;
+        nested_fieldn++;
       } else {
-        EXPECT(opts.strict_json ? kTokenStringConstant : kTokenIdentifier);
+        name = attribute_;
+        if (Is(kTokenStringConstant)) {
+          NEXT();
+        } else {
+          EXPECT(opts.strict_json ? kTokenStringConstant : kTokenIdentifier);
+        }
+        if (!opts.protobuf_ascii_alike || !(Is('{') || Is('['))) EXPECT(':');
       }
-      if (!opts.protobuf_ascii_alike || !(Is('{') || Is('['))) EXPECT(':');
+      ECHECK(body(name, fieldn, struct_def));
+      if (Is(terminator)) break;
+      ECHECK(ParseComma());
+      // Ignore single traling comma for non-strict json mode.
+      if (false == opts.strict_json && Is(terminator)) break;
     }
-    ECHECK(body(name, fieldn, struct_def));
-    if (Is(terminator)) break;
-    ECHECK(ParseComma());
   }
   NEXT();
-  if (is_nested_vector && fieldn != struct_def->fields.vec.size()) {
+  if (vec && nested_fieldn != vec->size()) {
     return Error("wrong number of unnamed fields in table vector");
   }
   return NoError();
@@ -2869,7 +2871,7 @@ CheckedError Parser::DoParse(const char *source, const char **include_paths,
       ECHECK(ParseProtoDecl());
     } else if (IsIdent("namespace")) {
       ECHECK(ParseNamespace());
-    } else if (token_ == '{') {
+    } else if ((token_ == '{') || (token_ == '[')) {
       if (!root_struct_def_)
         return Error("no root type set to parse json with");
       if (builder_.GetSize()) {
