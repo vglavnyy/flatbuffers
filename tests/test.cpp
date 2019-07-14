@@ -639,6 +639,26 @@ static bool is_quiet_nan(double v) {
   return is_quiet_nan_impl<double, uint64_t, 0x7FF8000000000000ul>(v);
 }
 
+// Implementation of native_type Pack/UnPack for the PolarPoint struct.
+namespace flatbuffers {
+inline MyGame::PolarPoint Pack(const std::complex<double> &z) {
+  // Store as single precision, use double precision for calculation.
+  return MyGame::PolarPoint(static_cast<float>(std::abs(z)),
+                            static_cast<float>(std::arg(z)));
+}
+inline std::complex<double> UnPack(const MyGame::PolarPoint &p) {
+  // UB if 'mag' is negative or NaN, or if 'arg' is infinite.
+  return std::polar(p.mag(), p.arg());
+}
+
+inline MyGame::Transformation Pack(const std::pair<double, double>& t) {
+  return MyGame::Transformation(static_cast<float>(t.first), static_cast<float>(t.second));
+}
+inline std::pair<double, double> UnPack(const MyGame::Transformation& t) {
+  return std::pair<double, double>(t.scale(), t.angle());
+}
+}  // namespace flatbuffers
+
 void TestMonsterExtraFloats() {
   TEST_EQ(is_quiet_nan(1.0), false);
   TEST_EQ(is_quiet_nan(infinityd), false);
@@ -719,6 +739,26 @@ void TestMonsterExtraFloats() {
   TEST_EQ(extra->dvec()->Get(1), +infinityd);
   TEST_EQ(extra->dvec()->Get(2), -infinityd);
   TEST_EQ(is_quiet_nan(extra->dvec()->Get(3)), true);
+  // Test object API and native_type.
+  MonsterExtraT extra_api;
+  extra->UnPackTo(&extra_api);
+  auto& contour = extra_api.polar_contour;
+  TEST_EQ(contour.size(), 3);
+  TEST_EQ(contour.at(0), std::complex<double>(0.0, 0.0));
+  TEST_ASSERT(std::abs(contour.at(1) - std::complex<double>(1.0, 0.0)) < 1e-7);
+  TEST_ASSERT(std::abs(contour.at(2) - std::complex<double>(0.0, 2.0)) < 1e-7);
+  auto& transform = extra_api.transform_chain;
+  TEST_EQ(transform.size(), 2);
+  TEST_EQ(transform.at(0).first, 2.0);
+  TEST_EQ(transform.at(1).first, 0.5);
+  TEST_EQ(transform.at(0).second, -transform.at(1).second);
+  contour.emplace_back(1.0, -1.0);
+  transform.emplace_back(1.0, 0.0);
+  // Test of native_type packing
+  FlatBufferBuilder msg;
+  msg.Finish(MonsterExtra::Pack(msg, &extra_api));
+  TEST_NOTNULL(msg.GetBufferPointer());
+  TEST_ASSERT(msg.GetSize()>0);
 }
 #else
 void TestMonsterExtraFloats() {}

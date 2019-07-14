@@ -206,7 +206,7 @@ The following attributes are specific to the object-based API code generation:
     with the given type.  So, continuing with the example, the generated
     code would use |vector2| in place of |Vec2T| for all generated code.
 
-    However, becuase the native_type is unknown to flatbuffers, the user must
+    However, because the native_type is unknown to flatbuffers, the user must
     provide the following functions to aide in the serialization process:
 
       namespace flatbuffers {

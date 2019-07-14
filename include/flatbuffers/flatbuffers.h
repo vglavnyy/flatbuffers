@@ -1649,13 +1649,11 @@ class FlatBufferBuilder {
   /// @param[in] len The number of elements to serialize.
   /// @return Returns a typed `Offset` into the serialized data indicating
   /// where the vector is stored.
-  template<typename T, typename S>
-  Offset<Vector<const T *>> CreateVectorOfNativeStructs(const S *v,
-                                                        size_t len) {
-    extern T Pack(const S &);
-    typedef T (*Pack_t)(const S &);
+  template<typename T, typename S, typename Function>
+  Offset<Vector<const T *>> CreateVectorOfNativeStructs(const S *v, size_t len,
+                                                        Function &&packer) {
     std::vector<T> vv(len);
-    std::transform(v, v + len, vv.begin(), static_cast<Pack_t&>(Pack));
+    std::transform(v, v + len, vv.begin(), std::forward<Function>(packer));
     return CreateVectorOfStructs<T>(vv.data(), vv.size());
   }
 
@@ -1721,10 +1719,11 @@ class FlatBufferBuilder {
   /// serialize into the buffer as a `vector`.
   /// @return Returns a typed `Offset` into the serialized data indicating
   /// where the vector is stored.
-  template<typename T, typename S>
-  Offset<Vector<const T *>> CreateVectorOfNativeStructs(
-      const std::vector<S> &v) {
-    return CreateVectorOfNativeStructs<T, S>(data(v), v.size());
+  template<typename T, typename S, typename Function>
+  Offset<Vector<const T *>> CreateVectorOfNativeStructs(const std::vector<S> &v,
+                                                        Function &&packer) {
+    return CreateVectorOfNativeStructs<T, S>(data(v), v.size(),
+                                             std::forward<Function>(packer));
   }
 
   /// @cond FLATBUFFERS_INTERNAL

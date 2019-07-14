@@ -42,6 +42,12 @@ public final class MonsterExtra extends Table {
   public ByteBuffer fvecAsByteBuffer() { return __vector_as_bytebuffer(22, 4); }
   public ByteBuffer fvecInByteBuffer(ByteBuffer _bb) { return __vector_in_bytebuffer(_bb, 22, 4); }
   public boolean mutateFvec(int j, float fvec) { int o = __offset(22); if (o != 0) { bb.putFloat(__vector(o) + j * 4, fvec); return true; } else { return false; } }
+  public MyGame.PolarPoint polarContour(int j) { return polarContour(new MyGame.PolarPoint(), j); }
+  public MyGame.PolarPoint polarContour(MyGame.PolarPoint obj, int j) { int o = __offset(24); return o != 0 ? obj.__assign(__vector(o) + j * 8, bb) : null; }
+  public int polarContourLength() { int o = __offset(24); return o != 0 ? __vector_len(o) : 0; }
+  public MyGame.Transformation transformChain(int j) { return transformChain(new MyGame.Transformation(), j); }
+  public MyGame.Transformation transformChain(MyGame.Transformation obj, int j) { int o = __offset(26); return o != 0 ? obj.__assign(__vector(o) + j * 8, bb) : null; }
+  public int transformChainLength() { int o = __offset(26); return o != 0 ? __vector_len(o) : 0; }
 
   public static int createMonsterExtra(FlatBufferBuilder builder,
       double d0,
@@ -53,12 +59,16 @@ public final class MonsterExtra extends Table {
       float f2,
       float f3,
       int dvecOffset,
-      int fvecOffset) {
-    builder.startTable(10);
+      int fvecOffset,
+      int polar_contourOffset,
+      int transform_chainOffset) {
+    builder.startTable(12);
     MonsterExtra.addD3(builder, d3);
     MonsterExtra.addD2(builder, d2);
     MonsterExtra.addD1(builder, d1);
     MonsterExtra.addD0(builder, d0);
+    MonsterExtra.addTransformChain(builder, transform_chainOffset);
+    MonsterExtra.addPolarContour(builder, polar_contourOffset);
     MonsterExtra.addFvec(builder, fvecOffset);
     MonsterExtra.addDvec(builder, dvecOffset);
     MonsterExtra.addF3(builder, f3);
@@ -68,7 +78,7 @@ public final class MonsterExtra extends Table {
     return MonsterExtra.endMonsterExtra(builder);
   }
 
-  public static void startMonsterExtra(FlatBufferBuilder builder) { builder.startTable(10); }
+  public static void startMonsterExtra(FlatBufferBuilder builder) { builder.startTable(12); }
   public static void addD0(FlatBufferBuilder builder, double d0) { builder.addDouble(0, d0, Double.NaN); }
   public static void addD1(FlatBufferBuilder builder, double d1) { builder.addDouble(1, d1, Double.NaN); }
   public static void addD2(FlatBufferBuilder builder, double d2) { builder.addDouble(2, d2, Double.POSITIVE_INFINITY); }
@@ -83,6 +93,10 @@ public final class MonsterExtra extends Table {
   public static void addFvec(FlatBufferBuilder builder, int fvecOffset) { builder.addOffset(9, fvecOffset, 0); }
   public static int createFvecVector(FlatBufferBuilder builder, float[] data) { builder.startVector(4, data.length, 4); for (int i = data.length - 1; i >= 0; i--) builder.addFloat(data[i]); return builder.endVector(); }
   public static void startFvecVector(FlatBufferBuilder builder, int numElems) { builder.startVector(4, numElems, 4); }
+  public static void addPolarContour(FlatBufferBuilder builder, int polarContourOffset) { builder.addOffset(10, polarContourOffset, 0); }
+  public static void startPolarContourVector(FlatBufferBuilder builder, int numElems) { builder.startVector(8, numElems, 4); }
+  public static void addTransformChain(FlatBufferBuilder builder, int transformChainOffset) { builder.addOffset(11, transformChainOffset, 0); }
+  public static void startTransformChainVector(FlatBufferBuilder builder, int numElems) { builder.startVector(8, numElems, 4); }
   public static int endMonsterExtra(FlatBufferBuilder builder) {
     int o = builder.endTable();
     return o;

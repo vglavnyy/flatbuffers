@@ -53,6 +53,10 @@ public struct MonsterExtra : IFlatbufferObject
 #endif
   public float[] GetFvecArray() { return __p.__vector_as_array<float>(22); }
   public bool MutateFvec(int j, float fvec) { int o = __p.__offset(22); if (o != 0) { __p.bb.PutFloat(__p.__vector(o) + j * 4, fvec); return true; } else { return false; } }
+  public MyGame.PolarPoint? PolarContour(int j) { int o = __p.__offset(24); return o != 0 ? (MyGame.PolarPoint?)(new MyGame.PolarPoint()).__assign(__p.__vector(o) + j * 8, __p.bb) : null; }
+  public int PolarContourLength { get { int o = __p.__offset(24); return o != 0 ? __p.__vector_len(o) : 0; } }
+  public MyGame.Transformation? TransformChain(int j) { int o = __p.__offset(26); return o != 0 ? (MyGame.Transformation?)(new MyGame.Transformation()).__assign(__p.__vector(o) + j * 8, __p.bb) : null; }
+  public int TransformChainLength { get { int o = __p.__offset(26); return o != 0 ? __p.__vector_len(o) : 0; } }
 
   public static Offset<MyGame.MonsterExtra> CreateMonsterExtra(FlatBufferBuilder builder,
       double d0 = Double.NaN,
@@ -64,12 +68,16 @@ public struct MonsterExtra : IFlatbufferObject
       float f2 = Single.PositiveInfinity,
       float f3 = Single.NegativeInfinity,
       VectorOffset dvecOffset = default(VectorOffset),
-      VectorOffset fvecOffset = default(VectorOffset)) {
-    builder.StartTable(10);
+      VectorOffset fvecOffset = default(VectorOffset),
+      VectorOffset polar_contourOffset = default(VectorOffset),
+      VectorOffset transform_chainOffset = default(VectorOffset)) {
+    builder.StartTable(12);
     MonsterExtra.AddD3(builder, d3);
     MonsterExtra.AddD2(builder, d2);
     MonsterExtra.AddD1(builder, d1);
     MonsterExtra.AddD0(builder, d0);
+    MonsterExtra.AddTransformChain(builder, transform_chainOffset);
+    MonsterExtra.AddPolarContour(builder, polar_contourOffset);
     MonsterExtra.AddFvec(builder, fvecOffset);
     MonsterExtra.AddDvec(builder, dvecOffset);
     MonsterExtra.AddF3(builder, f3);
@@ -79,7 +87,7 @@ public struct MonsterExtra : IFlatbufferObject
     return MonsterExtra.EndMonsterExtra(builder);
   }
 
-  public static void StartMonsterExtra(FlatBufferBuilder builder) { builder.StartTable(10); }
+  public static void StartMonsterExtra(FlatBufferBuilder builder) { builder.StartTable(12); }
   public static void AddD0(FlatBufferBuilder builder, double d0) { builder.AddDouble(0, d0, Double.NaN); }
   public static void AddD1(FlatBufferBuilder builder, double d1) { builder.AddDouble(1, d1, Double.NaN); }
   public static void AddD2(FlatBufferBuilder builder, double d2) { builder.AddDouble(2, d2, Double.PositiveInfinity); }
@@ -96,6 +104,10 @@ public struct MonsterExtra : IFlatbufferObject
   public static VectorOffset CreateFvecVector(FlatBufferBuilder builder, float[] data) { builder.StartVector(4, data.Length, 4); for (int i = data.Length - 1; i >= 0; i--) builder.AddFloat(data[i]); return builder.EndVector(); }
   public static VectorOffset CreateFvecVectorBlock(FlatBufferBuilder builder, float[] data) { builder.StartVector(4, data.Length, 4); builder.Add(data); return builder.EndVector(); }
   public static void StartFvecVector(FlatBufferBuilder builder, int numElems) { builder.StartVector(4, numElems, 4); }
+  public static void AddPolarContour(FlatBufferBuilder builder, VectorOffset polarContourOffset) { builder.AddOffset(10, polarContourOffset.Value, 0); }
+  public static void StartPolarContourVector(FlatBufferBuilder builder, int numElems) { builder.StartVector(8, numElems, 4); }
+  public static void AddTransformChain(FlatBufferBuilder builder, VectorOffset transformChainOffset) { builder.AddOffset(11, transformChainOffset.Value, 0); }
+  public static void StartTransformChainVector(FlatBufferBuilder builder, int numElems) { builder.StartVector(8, numElems, 4); }
   public static Offset<MyGame.MonsterExtra> EndMonsterExtra(FlatBufferBuilder builder) {
     int o = builder.EndTable();
     return new Offset<MyGame.MonsterExtra>(o);

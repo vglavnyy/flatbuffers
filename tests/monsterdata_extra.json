@@ -8,8 +8,11 @@
   f1 : -nan, // match with default
   f2 : +inf, // match with default
   f3 : -inf, // match with default
-  // Values should have exact binary representation 
+  // Values should have exact binary representation
   // to avoid rounding effects in tests.
   dvec : [2.0, +inf, -inf, nan,],
   fvec : [1.0, -inf, +inf, nan],
+  // [ (mag,arg) ]
+  polar_contour : [[0.0, 0.0 ], [1.0, 0.0], [2.0, rad(90.0)]],
+  transform_chain : [[2.0, rad(180.0)], [0.5, rad(-180.0)]],
 }

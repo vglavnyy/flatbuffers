@@ -6,15 +6,113 @@
 
 #include "flatbuffers/flatbuffers.h"
 
+#include "monster_extra_native.h"
+
 namespace MyGame {
+
+struct PolarPoint;
+
+struct Transformation;
 
 struct MonsterExtra;
 struct MonsterExtraT;
 
+bool operator==(const PolarPoint &lhs, const PolarPoint &rhs);
+bool operator!=(const PolarPoint &lhs, const PolarPoint &rhs);
+bool operator==(const Transformation &lhs, const Transformation &rhs);
+bool operator!=(const Transformation &lhs, const Transformation &rhs);
 bool operator==(const MonsterExtraT &lhs, const MonsterExtraT &rhs);
 bool operator!=(const MonsterExtraT &lhs, const MonsterExtraT &rhs);
 
+inline const flatbuffers::TypeTable *PolarPointTypeTable();
+
+inline const flatbuffers::TypeTable *TransformationTypeTable();
+
 inline const flatbuffers::TypeTable *MonsterExtraTypeTable();
+
+FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) PolarPoint FLATBUFFERS_FINAL_CLASS {
+ private:
+  float mag_;
+  float arg_;
+
+ public:
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return PolarPointTypeTable();
+  }
+  PolarPoint() {
+    memset(static_cast<void *>(this), 0, sizeof(PolarPoint));
+  }
+  PolarPoint(float _mag, float _arg)
+      : mag_(flatbuffers::EndianScalar(_mag)),
+        arg_(flatbuffers::EndianScalar(_arg)) {
+  }
+  float mag() const {
+    return flatbuffers::EndianScalar(mag_);
+  }
+  void mutate_mag(float _mag) {
+    flatbuffers::WriteScalar(&mag_, _mag);
+  }
+  float arg() const {
+    return flatbuffers::EndianScalar(arg_);
+  }
+  void mutate_arg(float _arg) {
+    flatbuffers::WriteScalar(&arg_, _arg);
+  }
+};
+FLATBUFFERS_STRUCT_END(PolarPoint, 8);
+
+inline bool operator==(const PolarPoint &lhs, const PolarPoint &rhs) {
+  return
+      (lhs.mag() == rhs.mag()) &&
+      (lhs.arg() == rhs.arg());
+}
+
+inline bool operator!=(const PolarPoint &lhs, const PolarPoint &rhs) {
+    return !(lhs == rhs);
+}
+
+
+FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) Transformation FLATBUFFERS_FINAL_CLASS {
+ private:
+  float scale_;
+  float angle_;
+
+ public:
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return TransformationTypeTable();
+  }
+  Transformation() {
+    memset(static_cast<void *>(this), 0, sizeof(Transformation));
+  }
+  Transformation(float _scale, float _angle)
+      : scale_(flatbuffers::EndianScalar(_scale)),
+        angle_(flatbuffers::EndianScalar(_angle)) {
+  }
+  float scale() const {
+    return flatbuffers::EndianScalar(scale_);
+  }
+  void mutate_scale(float _scale) {
+    flatbuffers::WriteScalar(&scale_, _scale);
+  }
+  float angle() const {
+    return flatbuffers::EndianScalar(angle_);
+  }
+  void mutate_angle(float _angle) {
+    flatbuffers::WriteScalar(&angle_, _angle);
+  }
+};
+FLATBUFFERS_STRUCT_END(Transformation, 8);
+
+inline bool operator==(const Transformation &lhs, const Transformation &rhs) {
+  return
+      (lhs.scale() == rhs.scale()) &&
+      (lhs.angle() == rhs.angle());
+}
+
+inline bool operator!=(const Transformation &lhs, const Transformation &rhs) {
+    return !(lhs == rhs);
+}
+
 
 struct MonsterExtraT : public flatbuffers::NativeTable {
   typedef MonsterExtra TableType;
@@ -28,6 +126,8 @@ struct MonsterExtraT : public flatbuffers::NativeTable {
   float f3;
   std::vector<double> dvec;
   std::vector<float> fvec;
+  std::vector<std::complex<double>> polar_contour;
+  std::vector<std::pair<double, double>> transform_chain;
   MonsterExtraT()
       : d0(std::numeric_limits<double>::quiet_NaN()),
         d1(std::numeric_limits<double>::quiet_NaN()),
@@ -51,7 +151,9 @@ inline bool operator==(const MonsterExtraT &lhs, const MonsterExtraT &rhs) {
       (lhs.f2 == rhs.f2) &&
       (lhs.f3 == rhs.f3) &&
       (lhs.dvec == rhs.dvec) &&
-      (lhs.fvec == rhs.fvec);
+      (lhs.fvec == rhs.fvec) &&
+      (lhs.polar_contour == rhs.polar_contour) &&
+      (lhs.transform_chain == rhs.transform_chain);
 }
 
 inline bool operator!=(const MonsterExtraT &lhs, const MonsterExtraT &rhs) {
@@ -74,7 +176,9 @@ struct MonsterExtra FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
     VT_F2 = 16,
     VT_F3 = 18,
     VT_DVEC = 20,
-    VT_FVEC = 22
+    VT_FVEC = 22,
+    VT_POLAR_CONTOUR = 24,
+    VT_TRANSFORM_CHAIN = 26
   };
   double d0() const {
     return GetField<double>(VT_D0, std::numeric_limits<double>::quiet_NaN());
@@ -136,6 +240,18 @@ struct MonsterExtra FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   flatbuffers::Vector<float> *mutable_fvec() {
     return GetPointer<flatbuffers::Vector<float> *>(VT_FVEC);
   }
+  const flatbuffers::Vector<const MyGame::PolarPoint *> *polar_contour() const {
+    return GetPointer<const flatbuffers::Vector<const MyGame::PolarPoint *> *>(VT_POLAR_CONTOUR);
+  }
+  flatbuffers::Vector<const MyGame::PolarPoint *> *mutable_polar_contour() {
+    return GetPointer<flatbuffers::Vector<const MyGame::PolarPoint *> *>(VT_POLAR_CONTOUR);
+  }
+  const flatbuffers::Vector<const MyGame::Transformation *> *transform_chain() const {
+    return GetPointer<const flatbuffers::Vector<const MyGame::Transformation *> *>(VT_TRANSFORM_CHAIN);
+  }
+  flatbuffers::Vector<const MyGame::Transformation *> *mutable_transform_chain() {
+    return GetPointer<flatbuffers::Vector<const MyGame::Transformation *> *>(VT_TRANSFORM_CHAIN);
+  }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<double>(verifier, VT_D0) &&
@@ -150,6 +266,10 @@ struct MonsterExtra FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
            verifier.VerifyVector(dvec()) &&
            VerifyOffset(verifier, VT_FVEC) &&
            verifier.VerifyVector(fvec()) &&
+           VerifyOffset(verifier, VT_POLAR_CONTOUR) &&
+           verifier.VerifyVector(polar_contour()) &&
+           VerifyOffset(verifier, VT_TRANSFORM_CHAIN) &&
+           verifier.VerifyVector(transform_chain()) &&
            verifier.EndTable();
   }
   MonsterExtraT *UnPack(const flatbuffers::resolver_function_t *_resolver = nullptr) const;
@@ -190,6 +310,12 @@ struct MonsterExtraBuilder {
   void add_fvec(flatbuffers::Offset<flatbuffers::Vector<float>> fvec) {
     fbb_.AddOffset(MonsterExtra::VT_FVEC, fvec);
   }
+  void add_polar_contour(flatbuffers::Offset<flatbuffers::Vector<const MyGame::PolarPoint *>> polar_contour) {
+    fbb_.AddOffset(MonsterExtra::VT_POLAR_CONTOUR, polar_contour);
+  }
+  void add_transform_chain(flatbuffers::Offset<flatbuffers::Vector<const MyGame::Transformation *>> transform_chain) {
+    fbb_.AddOffset(MonsterExtra::VT_TRANSFORM_CHAIN, transform_chain);
+  }
   explicit MonsterExtraBuilder(flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
@@ -213,12 +339,16 @@ inline flatbuffers::Offset<MonsterExtra> CreateMonsterExtra(
     float f2 = std::numeric_limits<float>::infinity(),
     float f3 = -std::numeric_limits<float>::infinity(),
     flatbuffers::Offset<flatbuffers::Vector<double>> dvec = 0,
-    flatbuffers::Offset<flatbuffers::Vector<float>> fvec = 0) {
+    flatbuffers::Offset<flatbuffers::Vector<float>> fvec = 0,
+    flatbuffers::Offset<flatbuffers::Vector<const MyGame::PolarPoint *>> polar_contour = 0,
+    flatbuffers::Offset<flatbuffers::Vector<const MyGame::Transformation *>> transform_chain = 0) {
   MonsterExtraBuilder builder_(_fbb);
   builder_.add_d3(d3);
   builder_.add_d2(d2);
   builder_.add_d1(d1);
   builder_.add_d0(d0);
+  builder_.add_transform_chain(transform_chain);
+  builder_.add_polar_contour(polar_contour);
   builder_.add_fvec(fvec);
   builder_.add_dvec(dvec);
   builder_.add_f3(f3);
@@ -239,9 +369,13 @@ inline flatbuffers::Offset<MonsterExtra> CreateMonsterExtraDirect(
     float f2 = std::numeric_limits<float>::infinity(),
     float f3 = -std::numeric_limits<float>::infinity(),
     const std::vector<double> *dvec = nullptr,
-    const std::vector<float> *fvec = nullptr) {
+    const std::vector<float> *fvec = nullptr,
+    const std::vector<MyGame::PolarPoint> *polar_contour = nullptr,
+    const std::vector<MyGame::Transformation> *transform_chain = nullptr) {
   auto dvec__ = dvec ? _fbb.CreateVector<double>(*dvec) : 0;
   auto fvec__ = fvec ? _fbb.CreateVector<float>(*fvec) : 0;
+  auto polar_contour__ = polar_contour ? _fbb.CreateVectorOfStructs<MyGame::PolarPoint>(*polar_contour) : 0;
+  auto transform_chain__ = transform_chain ? _fbb.CreateVectorOfStructs<MyGame::Transformation>(*transform_chain) : 0;
   return MyGame::CreateMonsterExtra(
       _fbb,
       d0,
@@ -253,7 +387,9 @@ inline flatbuffers::Offset<MonsterExtra> CreateMonsterExtraDirect(
       f2,
       f3,
       dvec__,
-      fvec__);
+      fvec__,
+      polar_contour__,
+      transform_chain__);
 }
 
 flatbuffers::Offset<MonsterExtra> CreateMonsterExtra(flatbuffers::FlatBufferBuilder &_fbb, const MonsterExtraT *_o, const flatbuffers::rehasher_function_t *_rehasher = nullptr);
@@ -277,6 +413,8 @@ inline void MonsterExtra::UnPackTo(MonsterExtraT *_o, const flatbuffers::resolve
   { auto _e = f3(); _o->f3 = _e; };
   { auto _e = dvec(); if (_e) { _o->dvec.resize(_e->size()); for (flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->dvec[_i] = _e->Get(_i); } } };
   { auto _e = fvec(); if (_e) { _o->fvec.resize(_e->size()); for (flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->fvec[_i] = _e->Get(_i); } } };
+  { auto _e = polar_contour(); if (_e) { _o->polar_contour.resize(_e->size()); for (flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->polar_contour[_i] = flatbuffers::UnPack(*_e->Get(_i)); } } };
+  { auto _e = transform_chain(); if (_e) { _o->transform_chain.resize(_e->size()); for (flatbuffers::uoffset_t _i = 0; _i < _e->size(); _i++) { _o->transform_chain[_i] = flatbuffers::UnPack(*_e->Get(_i)); } } };
 }
 
 inline flatbuffers::Offset<MonsterExtra> MonsterExtra::Pack(flatbuffers::FlatBufferBuilder &_fbb, const MonsterExtraT* _o, const flatbuffers::rehasher_function_t *_rehasher) {
@@ -297,6 +435,19 @@ inline flatbuffers::Offset<MonsterExtra> CreateMonsterExtra(flatbuffers::FlatBuf
   auto _f3 = _o->f3;
   auto _dvec = _o->dvec.size() ? _fbb.CreateVector(_o->dvec) : 0;
   auto _fvec = _o->fvec.size() ? _fbb.CreateVector(_o->fvec) : 0;
+  
+  auto _polar_contour = _o->polar_contour.size()
+    ? 
+    _fbb.CreateVectorOfNativeStructs<MyGame::PolarPoint>(_o->polar_contour, 
+      static_cast<MyGame::PolarPoint(*)(const std::complex<double>&)>(&flatbuffers::Pack))
+    : 0;
+  
+  auto _transform_chain = _o->transform_chain.size() 
+    ?
+    _fbb.CreateVectorOfNativeStructs<MyGame::Transformation>(_o->transform_chain,
+      static_cast<MyGame::Transformation(*)(const std::pair<double, double>&)>(&flatbuffers::Pack))
+    : 0;
+  
   return MyGame::CreateMonsterExtra(
       _fbb,
       _d0,
@@ -308,7 +459,41 @@ inline flatbuffers::Offset<MonsterExtra> CreateMonsterExtra(flatbuffers::FlatBuf
       _f2,
       _f3,
       _dvec,
-      _fvec);
+      _fvec,
+      _polar_contour,
+      _transform_chain);
+}
+
+inline const flatbuffers::TypeTable *PolarPointTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_FLOAT, 0, -1 },
+    { flatbuffers::ET_FLOAT, 0, -1 }
+  };
+  static const int64_t values[] = { 0, 4, 8 };
+  static const char * const names[] = {
+    "mag",
+    "arg"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_STRUCT, 2, type_codes, nullptr, values, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *TransformationTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_FLOAT, 0, -1 },
+    { flatbuffers::ET_FLOAT, 0, -1 }
+  };
+  static const int64_t values[] = { 0, 4, 8 };
+  static const char * const names[] = {
+    "scale",
+    "angle"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_STRUCT, 2, type_codes, nullptr, values, names
+  };
+  return &tt;
 }
 
 inline const flatbuffers::TypeTable *MonsterExtraTypeTable() {
@@ -322,7 +507,13 @@ inline const flatbuffers::TypeTable *MonsterExtraTypeTable() {
     { flatbuffers::ET_FLOAT, 0, -1 },
     { flatbuffers::ET_FLOAT, 0, -1 },
     { flatbuffers::ET_DOUBLE, 1, -1 },
-    { flatbuffers::ET_FLOAT, 1, -1 }
+    { flatbuffers::ET_FLOAT, 1, -1 },
+    { flatbuffers::ET_SEQUENCE, 1, 0 },
+    { flatbuffers::ET_SEQUENCE, 1, 1 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    MyGame::PolarPointTypeTable,
+    MyGame::TransformationTypeTable
   };
   static const char * const names[] = {
     "d0",
@@ -334,10 +525,12 @@ inline const flatbuffers::TypeTable *MonsterExtraTypeTable() {
     "f2",
     "f3",
     "dvec",
-    "fvec"
+    "fvec",
+    "polar_contour",
+    "transform_chain"
   };
   static const flatbuffers::TypeTable tt = {
-    flatbuffers::ST_TABLE, 10, type_codes, nullptr, nullptr, names
+    flatbuffers::ST_TABLE, 12, type_codes, type_refs, nullptr, names
   };
   return &tt;
 }

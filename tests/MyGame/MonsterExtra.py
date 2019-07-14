@@ -118,7 +118,45 @@ class MonsterExtra(object):
             return self._tab.VectorLen(o)
         return 0
 
-def MonsterExtraStart(builder): builder.StartObject(10)
+    # MonsterExtra
+    def PolarContour(self, j):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(24))
+        if o != 0:
+            x = self._tab.Vector(o)
+            x += flatbuffers.number_types.UOffsetTFlags.py_type(j) * 8
+            from .PolarPoint import PolarPoint
+            obj = PolarPoint()
+            obj.Init(self._tab.Bytes, x)
+            return obj
+        return None
+
+    # MonsterExtra
+    def PolarContourLength(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(24))
+        if o != 0:
+            return self._tab.VectorLen(o)
+        return 0
+
+    # MonsterExtra
+    def TransformChain(self, j):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(26))
+        if o != 0:
+            x = self._tab.Vector(o)
+            x += flatbuffers.number_types.UOffsetTFlags.py_type(j) * 8
+            from .Transformation import Transformation
+            obj = Transformation()
+            obj.Init(self._tab.Bytes, x)
+            return obj
+        return None
+
+    # MonsterExtra
+    def TransformChainLength(self):
+        o = flatbuffers.number_types.UOffsetTFlags.py_type(self._tab.Offset(26))
+        if o != 0:
+            return self._tab.VectorLen(o)
+        return 0
+
+def MonsterExtraStart(builder): builder.StartObject(12)
 def MonsterExtraAddD0(builder, d0): builder.PrependFloat64Slot(0, d0, float('nan'))
 def MonsterExtraAddD1(builder, d1): builder.PrependFloat64Slot(1, d1, float('nan'))
 def MonsterExtraAddD2(builder, d2): builder.PrependFloat64Slot(2, d2, float('inf'))
@@ -131,4 +169,8 @@ def MonsterExtraAddDvec(builder, dvec): builder.PrependUOffsetTRelativeSlot(8, f
 def MonsterExtraStartDvecVector(builder, numElems): return builder.StartVector(8, numElems, 8)
 def MonsterExtraAddFvec(builder, fvec): builder.PrependUOffsetTRelativeSlot(9, flatbuffers.number_types.UOffsetTFlags.py_type(fvec), 0)
 def MonsterExtraStartFvecVector(builder, numElems): return builder.StartVector(4, numElems, 4)
+def MonsterExtraAddPolarContour(builder, polarContour): builder.PrependUOffsetTRelativeSlot(10, flatbuffers.number_types.UOffsetTFlags.py_type(polarContour), 0)
+def MonsterExtraStartPolarContourVector(builder, numElems): return builder.StartVector(8, numElems, 4)
+def MonsterExtraAddTransformChain(builder, transformChain): builder.PrependUOffsetTRelativeSlot(11, flatbuffers.number_types.UOffsetTFlags.py_type(transformChain), 0)
+def MonsterExtraStartTransformChainVector(builder, numElems): return builder.StartVector(8, numElems, 4)
 def MonsterExtraEnd(builder): return builder.EndObject()

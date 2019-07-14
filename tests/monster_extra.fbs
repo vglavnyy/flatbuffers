@@ -1,4 +1,20 @@
+native_include "monster_extra_native.h";
+
 namespace MyGame;
+
+// A point in the polar complex plain.
+// The behavior is undefined if magnitude is negative or NaN, or if arg is infinite.
+// Store as single precision, use double precision for calculation.
+struct PolarPoint (native_type:"std::complex<double>") {
+  mag: float;
+  arg: float; // radians
+}
+
+// Another native_type tp check overloading.
+struct Transformation (native_type:"std::pair<double, double>") {
+  scale: float;
+  angle: float; // radians around (0,0)
+}
 
 // Not all programming languages support this extra table.
 table MonsterExtra {
@@ -13,6 +29,8 @@ table MonsterExtra {
   f3:float = -inf;
   dvec : [double];
   fvec : [float];
+  polar_contour : [PolarPoint];
+  transform_chain : [Transformation];
 }
 
 root_type MonsterExtra;
