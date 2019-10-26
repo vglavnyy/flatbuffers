@@ -6,9 +6,9 @@
 using namespace MyGame::Example;
 
 const std::string m1_name = "Cyberdemon";
-const Color m1_color = Color_Red;
+const Color m1_color = Color::Red;
 const std::string m2_name = "Imp";
-const Color m2_color = Color_Green;
+const Color m2_color = Color::Green;
 
 struct OwnedAllocator : public flatbuffers::DefaultAllocator {};
 

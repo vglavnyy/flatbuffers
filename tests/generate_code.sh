@@ -15,7 +15,12 @@
 # limitations under the License.
 set -e
 
-../flatc --cpp --java --kotlin  --csharp --dart --go --binary --lobster --lua --python --js --ts --php --rust --grpc --gen-mutable --reflect-names --gen-object-api --gen-compare --no-includes --cpp-ptr-type flatbuffers::unique_ptr  --no-fb-import -I include_test monster_test.fbs monsterdata_test.json
+MONSTER_TEST_COMMON_LANGS="--java --kotlin  --csharp --dart --go --binary --lobster --lua --python --js --ts --php --rust --grpc"
+MONSTER_TEST_COMMON_FLAGS="--gen-mutable --no-includes --no-fb-import"
+MONSTER_TEST_CPP_FLAGS="--scoped-enums --reflect-names --gen-object-api --gen-compare --cpp-ptr-type flatbuffers::unique_ptr"
+
+../flatc $MONSTER_TEST_COMMON_LANGS $MONSTER_TEST_COMMON_FLAGS -I include_test monster_test.fbs monsterdata_test.json
+../flatc --cpp $MONSTER_TEST_COMMON_FLAGS $MONSTER_TEST_CPP_FLAGS -I include_test monster_test.fbs monsterdata_test.json
 ../flatc --cpp --java --kotlin --csharp --dart --go --binary --lobster --lua --python --js --ts --php --rust --gen-mutable --reflect-names --no-fb-import --cpp-ptr-type flatbuffers::unique_ptr  -o namespace_test namespace_test/namespace_test1.fbs namespace_test/namespace_test2.fbs
 ../flatc --cpp --java --kotlin --csharp --js --ts --php --gen-mutable --reflect-names --gen-object-api --gen-compare --cpp-ptr-type flatbuffers::unique_ptr -o union_vector ./union_vector/union_vector.fbs
 ../flatc -b --schema --bfbs-comments --bfbs-builtins -I include_test monster_test.fbs

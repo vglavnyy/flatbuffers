@@ -87,7 +87,7 @@ std::string test_data_path =
 flatbuffers::DetachedBuffer CreateFlatBufferTest(std::string &buffer) {
   flatbuffers::FlatBufferBuilder builder;
 
-  auto vec = Vec3(1, 2, 3, 0, Color_Red, Test(10, 20));
+  auto vec = Vec3(1, 2, 3, 0, Color::Red, Test(10, 20));
 
   auto name = builder.CreateString("MyMonster");
 
@@ -193,21 +193,21 @@ flatbuffers::DetachedBuffer CreateFlatBufferTest(std::string &buffer) {
   auto flex = builder.CreateVector(flexbuild.GetBuffer());
 
   // Test vector of enums.
-  Color colors[] = { Color_Blue, Color_Green };
+  Color colors[] = { Color::Blue, Color::Green };
   // We use this special creation function because we have an array of
   // pre-C++11 (enum class) enums whose size likely is int, yet its declared
   // type in the schema is byte.
   auto vecofcolors = builder.CreateVectorScalarCast<uint8_t, Color>(colors, 2);
 
   // shortcut for creating monster with all fields set:
-  auto mloc = CreateMonster(builder, &vec, 150, 80, name, inventory, Color_Blue,
-                            Any_Monster, mlocs[1].Union(),  // Store a union.
+  auto mloc = CreateMonster(builder, &vec, 150, 80, name, inventory, Color::Blue,
+                            Any::Monster, mlocs[1].Union(),  // Store a union.
                             testv, vecofstrings, vecoftables, 0,
                             nested_flatbuffer_vector, 0, false, 0, 0, 0, 0, 0,
                             0, 0, 0, 0, 3.14159f, 3.0f, 0.0f, vecofstrings2,
                             vecofstructs, flex, testv2, 0, 0, 0, 0, 0, 0, 0, 0,
-                            0, 0, 0, AnyUniqueAliases_NONE, 0,
-                            AnyAmbiguousAliases_NONE, 0, vecofcolors);
+                            0, 0, 0, AnyUniqueAliases::NONE, 0,
+                            AnyAmbiguousAliases::NONE, 0, vecofcolors);
 
   FinishMonsterBuffer(builder, mloc);
 
@@ -310,10 +310,10 @@ void AccessFlatBufferTest(const uint8_t *flatbuf, size_t length,
   }
   TEST_EQ(n, inv_vec.size());
 
-  TEST_EQ(monster->color(), Color_Blue);
+  TEST_EQ(monster->color(), Color::Blue);
 
   // Example of accessing a union:
-  TEST_EQ(monster->test_type(), Any_Monster);  // First make sure which it is.
+  TEST_EQ(monster->test_type(), Any::Monster);  // First make sure which it is.
   auto monster2 = reinterpret_cast<const Monster *>(monster->test());
   TEST_NOTNULL(monster2);
   TEST_EQ_STR(monster2->name()->c_str(), "Fred");
@@ -385,8 +385,8 @@ void AccessFlatBufferTest(const uint8_t *flatbuf, size_t length,
   auto colors = monster->vector_of_enums();
   if (colors) {
     TEST_EQ(colors->size(), 2);
-    TEST_EQ(colors->Get(0), Color_Blue);
-    TEST_EQ(colors->Get(1), Color_Green);
+    TEST_EQ(colors->Get(0), Color::Blue);
+    TEST_EQ(colors->Get(1), Color::Green);
   }
 
   // Since Flatbuffers uses explicit mechanisms to override the default
@@ -532,7 +532,7 @@ void ObjectFlatBuffersTest(uint8_t *flatbuf) {
   for (auto it = inventory.begin(); it != inventory.end(); ++it)
     TEST_EQ(*it, inv_data[it - inventory.begin()]);
 
-  TEST_EQ(monster2->color, Color_Blue);
+  TEST_EQ(monster2->color, Color::Blue);
 
   auto monster3 = monster2->test.AsMonster();
   TEST_NOTNULL(monster3);
@@ -642,7 +642,7 @@ void JsonEnumsTest() {
   auto name = builder.CreateString("bitflag_enum");
   MonsterBuilder color_monster(builder);
   color_monster.add_name(name);
-  color_monster.add_color(Color(Color_Blue | Color_Red));
+  color_monster.add_color(Color(Color::Blue | Color::Red));
   FinishMonsterBuffer(builder, color_monster.Finish());
   std::string jsongen;
   auto result = GenerateText(parser, builder.GetBufferPointer(), &jsongen);
@@ -1060,7 +1060,7 @@ void MiniReflectFlatBuffersTest(uint8_t *flatbuf) {
       "}");
 
   Test test(16, 32);
-  Vec3 vec(1,2,3, 1.5, Color_Red, test);
+  Vec3 vec(1,2,3, 1.5, Color::Red, test);
   flatbuffers::FlatBufferBuilder vec_builder;
   vec_builder.Finish(vec_builder.CreateStruct(vec));
   auto vec_buffer = vec_builder.Release();
@@ -1598,9 +1598,9 @@ void EnumStringsTest() {
 }
 
 void EnumNamesTest() {
-  TEST_EQ_STR("Red", EnumNameColor(Color_Red));
-  TEST_EQ_STR("Green", EnumNameColor(Color_Green));
-  TEST_EQ_STR("Blue", EnumNameColor(Color_Blue));
+  TEST_EQ_STR("Red", EnumNameColor(Color::Red));
+  TEST_EQ_STR("Green", EnumNameColor(Color::Green));
+  TEST_EQ_STR("Blue", EnumNameColor(Color::Blue));
   // Check that Color to string don't crash while decode a mixture of Colors.
   // 1) Example::Color enum is enum with unfixed underlying type.
   // 2) Valid enum range: [0; 2^(ceil(log2(Color_ANY))) - 1].
@@ -1608,8 +1608,8 @@ void EnumNamesTest() {
   // For details see C++17 standard or explanation on the SO:
   // stackoverflow.com/questions/18195312/what-happens-if-you-static-cast-invalid-value-to-enum-class
   TEST_EQ_STR("", EnumNameColor(static_cast<Color>(0)));
-  TEST_EQ_STR("", EnumNameColor(static_cast<Color>(Color_ANY-1)));
-  TEST_EQ_STR("", EnumNameColor(static_cast<Color>(Color_ANY+1)));
+ // TEST_EQ_STR("", EnumNameColor(static_cast<Color>(Color::ANY-1)));
+ // TEST_EQ_STR("", EnumNameColor(static_cast<Color>(Color::ANY+1)));
 }
 
 void EnumOutOfRangeTest() {
@@ -2773,7 +2773,7 @@ void EqualOperatorTest() {
   TEST_EQ(b == a, true);
   TEST_EQ(b != a, false);
 
-  b.test.type = Any_Monster;
+  b.test.type = Any::Monster;
   TEST_EQ(b == a, false);
   TEST_EQ(b != a, true);
 }
