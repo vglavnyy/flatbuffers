@@ -760,8 +760,11 @@ CheckedError Parser::ParseField(StructDef &struct_def) {
       FLATBUFFERS_ASSERT(field->value.constant == "0");
     } else {
       // All unions should have the NONE ("0") enum value.
-      auto in_enum = type.enum_def->attributes.Lookup("bit_flags") ||
-                     type.enum_def->FindByValue(field->value.constant);
+      auto e = type.enum_def->FindByValue(field->value.constant);
+      auto in_enum = (nullptr != e) || (field->value.constant == "0");
+      if(!in_enum && type.enum_def->attributes.Lookup("bit_flags"))  {
+        in_enum = type.enum_def->WithinFlags(field->value.constant);
+      }
       if (false == in_enum)
         return Error("default value of " + field->value.constant +
                      " for field " + name + " is not part of enum " +
@@ -1870,13 +1873,34 @@ uint64_t EnumDef::Distance(const EnumVal *v1, const EnumVal *v2) const {
                     : EnumDistanceImpl(v1->GetAsInt64(), v2->GetAsInt64());
 }
 
-std::string EnumDef::AllFlags() const {
-  FLATBUFFERS_ASSERT(attributes.Lookup("bit_flags"));
+uint64_t EnumDef::Coverage() const {
   uint64_t u64 = 0;
   for (auto it = Vals().begin(); it != Vals().end(); ++it) {
     u64 |= (*it)->GetAsUInt64();
   }
+  return u64;
+}
+
+std::string EnumDef::AllFlags() const {
+  FLATBUFFERS_ASSERT(attributes.Lookup("bit_flags"));
+  uint64_t u64 = Coverage();
   return IsUInt64() ? NumToString(u64) : NumToString(static_cast<int64_t>(u64));
+}
+
+bool EnumDef::WithinFlags(const std::string &v) const {
+  uint64_t u64 = 0;
+  auto done = false;
+  if (IsUInt64()) {
+    done = StringToNumber(v.c_str(), &u64);
+  } else {
+    int64_t i64 = 0;
+    done = StringToNumber(v.c_str(), &i64);
+    u64 = static_cast<uint64_t>(i64);
+  }
+  if (false == done)
+    return false;
+  uint64_t bits = Coverage();
+  return 0 == (u64 & ~bits);
 }
 
 EnumVal *EnumDef::ReverseLookup(int64_t enum_idx,

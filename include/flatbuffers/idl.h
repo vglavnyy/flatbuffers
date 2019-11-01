@@ -417,7 +417,9 @@ struct EnumDef : public Definition {
   void SortByValue();
   void RemoveDuplicates();
 
+  uint64_t Coverage() const;
   std::string AllFlags() const;
+  bool WithinFlags(const std::string &v) const;
   const EnumVal *MinValue() const;
   const EnumVal *MaxValue() const;
   // Returns the number of integer steps from v1 to v2.
