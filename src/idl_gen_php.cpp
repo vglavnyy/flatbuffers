@@ -232,7 +232,6 @@ class PhpGenerator : public BaseGenerator {
   // Get the value of a table's scalar.
   void GetScalarFieldOfTable(const FieldDef &field, std::string *code_ptr) {
     std::string &code = *code_ptr;
-    std::string getter = GenGetter(field.value.type);
 
     code += Indent + "/**\n";
     code += Indent + " * @return " + GenTypeGet(field.value.type) + "\n";
@@ -673,7 +672,7 @@ class PhpGenerator : public BaseGenerator {
   // Generate a struct field, conditioned on its child type(s).
   void GenStructAccessor(const StructDef &struct_def, const FieldDef &field,
                          std::string *code_ptr) {
-    GenComment(field.doc_comment, code_ptr, nullptr);
+    GenComment(field.doc_comment, code_ptr, nullptr, Indent.c_str());
 
     if (IsScalar(field.value.type.base_type)) {
       if (struct_def.fixed) {
@@ -818,7 +817,7 @@ class PhpGenerator : public BaseGenerator {
     BeginEnum(enum_def.name, code_ptr);
     for (auto it = enum_def.Vals().begin(); it != enum_def.Vals().end(); ++it) {
       auto &ev = **it;
-      GenComment(ev.doc_comment, code_ptr, nullptr);
+      GenComment(ev.doc_comment, code_ptr, nullptr, Indent.c_str());
       EnumMember(enum_def, ev, code_ptr);
     }
 
@@ -827,7 +826,8 @@ class PhpGenerator : public BaseGenerator {
     code += Indent + "private static $names = array(\n";
     for (auto it = enum_def.Vals().begin(); it != enum_def.Vals().end(); ++it) {
       auto &ev = **it;
-      code += Indent + Indent + enum_def.name + "::" + ev.name + "=>" + "\"" + ev.name + "\",\n";
+      code += Indent + Indent + enum_def.name + "::" + ev.name + "=>" + "\"" +
+              ev.name + "\",\n";
     }
 
     code += Indent + ");\n\n";
@@ -860,15 +860,15 @@ class PhpGenerator : public BaseGenerator {
   }
 
   static std::string GenTypeBasic(const Type &type) {
-    static const char *ctypename[] = {
     // clang-format off
-        #define FLATBUFFERS_TD(ENUM, IDLTYPE, \
-            CTYPE, JTYPE, GTYPE, NTYPE, PTYPE, RTYPE) \
-            #NTYPE,
-                FLATBUFFERS_GEN_TYPES(FLATBUFFERS_TD)
-        #undef FLATBUFFERS_TD
-      // clang-format on
+    static const char *ctypename[] = {
+      #define FLATBUFFERS_TD(ENUM, IDLTYPE, \
+              CTYPE, JTYPE, GTYPE, NTYPE, ...) \
+        #NTYPE,
+        FLATBUFFERS_GEN_TYPES(FLATBUFFERS_TD)
+      #undef FLATBUFFERS_TD
     };
+    // clang-format on
     return ctypename[type.base_type];
   }
 

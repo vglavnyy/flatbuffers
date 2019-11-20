@@ -9,9 +9,10 @@ import com.google.flatbuffers.*;
 
 @SuppressWarnings("unused")
 public final class Referrable extends Table {
+  public static void ValidateVersion() { Constants.FLATBUFFERS_1_11_1(); }
   public static Referrable getRootAsReferrable(ByteBuffer _bb) { return getRootAsReferrable(_bb, new Referrable()); }
-  public static Referrable getRootAsReferrable(ByteBuffer _bb, Referrable obj) { Constants.FLATBUFFERS_1_11_1(); _bb.order(ByteOrder.LITTLE_ENDIAN); return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb)); }
-  public void __init(int _i, ByteBuffer _bb) { bb_pos = _i; bb = _bb; vtable_start = bb_pos - bb.getInt(bb_pos); vtable_size = bb.getShort(vtable_start); }
+  public static Referrable getRootAsReferrable(ByteBuffer _bb, Referrable obj) { _bb.order(ByteOrder.LITTLE_ENDIAN); return (obj.__assign(_bb.getInt(_bb.position()) + _bb.position(), _bb)); }
+  public void __init(int _i, ByteBuffer _bb) { __reset(_i, _bb); }
   public Referrable __assign(int _i, ByteBuffer _bb) { __init(_i, _bb); return this; }
 
   public long id() { int o = __offset(4); return o != 0 ? bb.getLong(o + bb_pos) : 0L; }
@@ -57,6 +58,15 @@ public final class Referrable extends Table {
       }
     }
     return null;
+  }
+
+  public static final class Vector extends BaseVector {
+    public Vector __assign(int _vector, int _element_size, ByteBuffer _bb) { __reset(_vector, _element_size, _bb); return this; }
+
+    public Referrable get(int j) { return get(new Referrable(), j); }
+    public Referrable get(Referrable obj, int j) {  return obj.__assign(__indirect(__element(j), bb), bb); }
+    public Referrable getByKey(long key) {  return __lookup_by_key(null, __vector(), key, bb); }
+    public Referrable getByKey(Referrable obj, long key) {  return __lookup_by_key(obj, __vector(), key, bb); }
   }
 }
 

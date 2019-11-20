@@ -15,6 +15,7 @@
  */
 
 #include <iostream>
+
 #include "flatbuffers/code_generators.h"
 #include "flatbuffers/idl.h"
 #include "flatbuffers/util.h"
@@ -42,6 +43,7 @@ std::string GenNativeType(BaseType type) {
     case BASE_TYPE_FLOAT:
     case BASE_TYPE_DOUBLE: return "number";
     case BASE_TYPE_STRING: return "string";
+    case BASE_TYPE_ARRAY: return "array";
     default: return "";
   }
 }
@@ -70,6 +72,7 @@ std::string GenType(const Type &type) {
     return GenTypeRef(type.enum_def);
   }
   switch (type.base_type) {
+    case BASE_TYPE_ARRAY: FLATBUFFERS_FALLTHROUGH();  // fall thru
     case BASE_TYPE_VECTOR: {
       std::string typeline;
       typeline.append("\"type\" : \"array\", \"items\" : { ");
@@ -119,6 +122,7 @@ class JsonSchemaGenerator : public BaseGenerator {
       : BaseGenerator(base_generator) {}
 
   bool generate() {
+    if (parser_.root_struct_def_ == nullptr) { return false; }
     code_.Clear();
     code_ += "{";
     code_ += "  \"$schema\": \"http://json-schema.org/draft-04/schema#\",";
@@ -156,8 +160,16 @@ class JsonSchemaGenerator : public BaseGenerator {
       const auto &properties = structure->fields.vec;
       for (auto prop = properties.cbegin(); prop != properties.cend(); ++prop) {
         const auto &property = *prop;
-        std::string typeLine("        \"" + property->name + "\" : { " +
-                             GenType(property->value.type) + " }");
+        std::string arrayInfo = "";
+        if (IsArray(property->value.type)) {
+          arrayInfo = ",\n                \"minItems\": " +
+                      NumToString(property->value.type.fixed_length) +
+                      ",\n                \"maxItems\": " +
+                      NumToString(property->value.type.fixed_length);
+        }
+        std::string typeLine =
+            "        \"" + property->name + "\" : {\n" + "                " +
+            GenType(property->value.type) + arrayInfo + "\n              }";
         if (property != properties.back()) { typeLine.append(","); }
         code_ += typeLine;
       }
