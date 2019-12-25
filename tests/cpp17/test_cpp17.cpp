@@ -36,8 +36,38 @@ namespace cpp11 {
 #include "../monster_test_generated.h"
 }  // namespace cpp11
 
+namespace flatbuffers {
+template<class T> struct TableTraits {};
+}  // namespace flatbuffers
+
+namespace cpp17 {
+namespace MyGame {
+namespace Example {
+
+template<typename... Args>
+auto CreateTable(flatbuffers::TableTraits<Stat>, flatbuffers::FlatBufferBuilder &_fbb,
+                 Args &&... args) {
+    return CreateStat(_fbb, std::forward<Args>(args)...);
+}
+
+template<typename... Args>
+auto CreateTable(const StatT &_o, flatbuffers::FlatBufferBuilder &_fbb,
+  Args &&... args) {
+  return CreateStat(_fbb, &_o, std::forward<Args>(args)...);
+}
+
+}  // namespace Example
+}  // namespace MyGame
+}  // namespace cpp17
+
 int FlatBufferCpp17Tests() {
   TEST_ASSERT(true);
+
+  using TypeTrait = flatbuffers::TableTraits<cpp17::MyGame::Example::Stat>;
+  flatbuffers::FlatBufferBuilder fbb;
+
+  auto m = CreateTable(TypeTrait{}, fbb);
+
   return 0;
 }
 
