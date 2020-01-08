@@ -19,17 +19,22 @@
 
 #include <errno.h>
 
-#include "flatbuffers/base.h"
+#if defined(FLATBUFFERS_LOCALE_INDEPENDENT) && \
+    (FLATBUFFERS_LOCALE_INDEPENDENT > 0)
+#  include <clocale>
+#endif
 
 #ifndef FLATBUFFERS_PREFER_PRINTF
+#  include <iomanip>
 #  include <sstream>
 #else  // FLATBUFFERS_PREFER_PRINTF
 #  include <float.h>
 #  include <stdio.h>
 #endif  // FLATBUFFERS_PREFER_PRINTF
 
-#include <iomanip>
 #include <string>
+
+#include "flatbuffers/base.h"
 
 namespace flatbuffers {
 
@@ -82,7 +87,7 @@ template<typename T> size_t IntToDigitCount(T t) {
   // Count a single 0 left of the dot for fractional numbers
   if (-1 < t && t < 1) digit_count++;
   // Count digits until fractional part
-  T eps = std::numeric_limits<float>::epsilon();
+  T eps = static_cast<T>(std::numeric_limits<float>::epsilon());
   while (t <= (-1 + eps) || (1 - eps) <= t) {
     t /= 10;
     digit_count++;
@@ -390,78 +395,6 @@ inline uint64_t StringToUInt(const char *s, int base = 10) {
   return StringToIntegerImpl(&val, s, base) ? val : 0;
 }
 
-typedef bool (*LoadFileFunction)(const char *filename, bool binary,
-                                 std::string *dest);
-typedef bool (*FileExistsFunction)(const char *filename);
-
-LoadFileFunction SetLoadFileFunction(LoadFileFunction load_file_function);
-
-FileExistsFunction SetFileExistsFunction(
-    FileExistsFunction file_exists_function);
-
-// Check if file "name" exists.
-bool FileExists(const char *name);
-
-// Check if "name" exists and it is also a directory.
-bool DirExists(const char *name);
-
-// Load file "name" into "buf" returning true if successful
-// false otherwise.  If "binary" is false data is read
-// using ifstream's text mode, otherwise data is read with
-// no transcoding.
-bool LoadFile(const char *name, bool binary, std::string *buf);
-
-// Save data "buf" of length "len" bytes into a file
-// "name" returning true if successful, false otherwise.
-// If "binary" is false data is written using ifstream's
-// text mode, otherwise data is written with no
-// transcoding.
-bool SaveFile(const char *name, const char *buf, size_t len, bool binary);
-
-// Save data "buf" into file "name" returning true if
-// successful, false otherwise.  If "binary" is false
-// data is written using ifstream's text mode, otherwise
-// data is written with no transcoding.
-inline bool SaveFile(const char *name, const std::string &buf, bool binary) {
-  return SaveFile(name, buf.c_str(), buf.size(), binary);
-}
-
-// Functionality for minimalistic portable path handling.
-
-// The functions below behave correctly regardless of whether posix ('/') or
-// Windows ('/' or '\\') separators are used.
-
-// Any new separators inserted are always posix.
-FLATBUFFERS_CONSTEXPR char kPathSeparator = '/';
-
-// Returns the path with the extension, if any, removed.
-std::string StripExtension(const std::string &filepath);
-
-// Returns the extension, if any.
-std::string GetExtension(const std::string &filepath);
-
-// Return the last component of the path, after the last separator.
-std::string StripPath(const std::string &filepath);
-
-// Strip the last component of the path + separator.
-std::string StripFileName(const std::string &filepath);
-
-// Concatenates a path with a filename, regardless of wether the path
-// ends in a separator or not.
-std::string ConCatPathFileName(const std::string &path,
-                               const std::string &filename);
-
-// Replaces any '\\' separators with '/'
-std::string PosixPath(const char *path);
-
-// This function ensure a directory exists, by recursively
-// creating dirs for any parts of the path that don't exist yet.
-void EnsureDirExists(const std::string &filepath);
-
-// Obtains the absolute path from any other path.
-// Returns the input path if the absolute path couldn't be resolved.
-std::string AbsolutePath(const std::string &filepath);
-
 // To and from UTF-8 unicode conversion functions
 
 // Convert a unicode code point into a UTF-8 representation by appending it
@@ -537,35 +470,6 @@ inline int FromUTF8(const char **in) {
   return ucc;
 }
 
-#ifndef FLATBUFFERS_PREFER_PRINTF
-// Wraps a string to a maximum length, inserting new lines where necessary. Any
-// existing whitespace will be collapsed down to a single space. A prefix or
-// suffix can be provided, which will be inserted before or after a wrapped
-// line, respectively.
-inline std::string WordWrap(const std::string in, size_t max_length,
-                            const std::string wrapped_line_prefix,
-                            const std::string wrapped_line_suffix) {
-  std::istringstream in_stream(in);
-  std::string wrapped, line, word;
-
-  in_stream >> word;
-  line = word;
-
-  while (in_stream >> word) {
-    if ((line.length() + 1 + word.length() + wrapped_line_suffix.length()) <
-        max_length) {
-      line += " " + word;
-    } else {
-      wrapped += line + wrapped_line_suffix + "\n";
-      line = wrapped_line_prefix + word;
-    }
-  }
-  wrapped += line;
-
-  return wrapped;
-}
-#endif  // !FLATBUFFERS_PREFER_PRINTF
-
 inline bool EscapeString(const char *s, size_t length, std::string *_text,
                          bool allow_non_utf8, bool natural_utf8) {
   std::string &text = *_text;
@@ -636,21 +540,80 @@ inline bool EscapeString(const char *s, size_t length, std::string *_text,
   return true;
 }
 
-// Remove paired quotes in a string: "text"|'text' -> text.
-std::string RemoveStringQuotes(const std::string &s);
-
-// Change th global C-locale to locale with name <locale_name>.
-// Returns an actual locale name in <_value>, useful if locale_name is "" or
-// null.
-bool SetGlobalTestLocale(const char *locale_name,
-                         std::string *_value = nullptr);
-
-// Read (or test) a value of environment variable.
-bool ReadEnvironmentVariable(const char *var_name,
-                             std::string *_value = nullptr);
+// Platform dependent code.
 
 // MSVC specific: Send all assert reports to STDOUT to prevent CI hangs.
 void SetupDefaultCRTReportMode();
+
+// The functions below behave correctly regardless of whether posix ('/') or
+// Windows ('/' or '\\') separators are used.
+
+// Any new separators inserted are always posix.
+FLATBUFFERS_CONSTEXPR char kPathSeparator = '/';
+
+typedef bool (*LoadFileFunction)(const char *filename, bool binary,
+                                 std::string *dest);
+typedef bool (*FileExistsFunction)(const char *filename);
+
+LoadFileFunction SetLoadFileFunction(LoadFileFunction load_file_function);
+
+FileExistsFunction SetFileExistsFunction(
+    FileExistsFunction file_exists_function);
+
+// Check if file "name" exists.
+bool FileExists(const char *name);
+
+// Load file "name" into "buf" returning true if successful
+// false otherwise.  If "binary" is false data is read
+// using ifstream's text mode, otherwise data is read with
+// no transcoding.
+bool LoadFile(const char *name, bool binary, std::string *buf);
+
+// Save data "buf" of length "len" bytes into a file
+// "name" returning true if successful, false otherwise.
+// If "binary" is false data is written using ifstream's
+// text mode, otherwise data is written with no
+// transcoding.
+bool SaveFile(const char *name, const char *buf, size_t len, bool binary);
+
+// Save data "buf" into file "name" returning true if
+// successful, false otherwise.  If "binary" is false
+// data is written using ifstream's text mode, otherwise
+// data is written with no transcoding.
+bool SaveFile(const char* name, const std::string& buf, bool binary);
+
+// Functionality for minimalistic portable path handling.
+
+// Returns the path with the extension, if any, removed.
+std::string StripExtension(const std::string &filepath);
+
+// Returns the extension, if any.
+std::string GetExtension(const std::string &filepath);
+
+// Return the last component of the path, after the last separator.
+std::string StripPath(const std::string &filepath);
+
+// Strip the last component of the path + separator.
+std::string StripFileName(const std::string &filepath);
+
+// Concatenates a path with a filename, regardless of wether the path
+// ends in a separator or not.
+std::string ConCatPathFileName(const std::string &path,
+                               const std::string &filename);
+
+// Replaces any '\\' separators with '/'
+std::string PosixPath(const char *path);
+
+// Check if "name" exists and it is also a directory.
+bool DirExists(const char *name);
+
+// This function ensure a directory exists, by recursively
+// creating dirs for any parts of the path that don't exist yet.
+void EnsureDirExists(const std::string &filepath);
+
+// Obtains the absolute path from any other path.
+// Returns the input path if the absolute path couldn't be resolved.
+std::string AbsolutePath(const std::string &filepath);
 
 }  // namespace flatbuffers
 

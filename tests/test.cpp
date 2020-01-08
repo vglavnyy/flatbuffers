@@ -3367,14 +3367,13 @@ int main(int /*argc*/, const char * /*argv*/[]) {
   InitTestEngine();
 
   std::string req_locale;
-  if (flatbuffers::ReadEnvironmentVariable("FLATBUFFERS_TEST_LOCALE",
+  if (ReadEnvironmentVariable("FLATBUFFERS_TEST_LOCALE",
                                            &req_locale)) {
     TEST_OUTPUT_LINE("The environment variable FLATBUFFERS_TEST_LOCALE=%s",
                      req_locale.c_str());
-    req_locale = flatbuffers::RemoveStringQuotes(req_locale);
     std::string the_locale;
     TEST_ASSERT_FUNC(
-        flatbuffers::SetGlobalTestLocale(req_locale.c_str(), &the_locale));
+        SetGlobalTestLocale(req_locale, &the_locale));
     TEST_OUTPUT_LINE("The global C-locale changed: %s", the_locale.c_str());
   }
 

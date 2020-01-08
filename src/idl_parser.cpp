@@ -118,7 +118,7 @@ void DeserializeDoc(std::vector<std::string> &doc,
 
 void Parser::Message(const std::string &msg) {
   if (!error_.empty()) error_ += "\n";  // log all warnings and errors
-  error_ += file_being_parsed_.length() ? AbsolutePath(file_being_parsed_) : "";
+  error_ += file_being_parsed_abs_;
   // clang-format off
 
   #ifdef _WIN32  // MSVC alike
@@ -1329,7 +1329,7 @@ CheckedError Parser::ParseVector(const Type &type, uoffset_t *ovalue,
         break;
       }
     }
-    assert(key);
+    FLATBUFFERS_ASSERT(key);
     // Now sort it.
     // We can't use std::sort because for structs the size is not known at
     // compile time, and for tables our iterators dereference offsets, so can't
@@ -1379,7 +1379,7 @@ CheckedError Parser::ParseVector(const Type &type, uoffset_t *ovalue,
             // These are serialized offsets, so are relative where they are
             // stored in memory, so compute the distance between these pointers:
             ptrdiff_t diff = (b - a) * sizeof(Offset<Table>);
-            assert(diff >= 0);  // Guaranteed by SimpleQsort.
+            FLATBUFFERS_ASSERT(diff >= 0);  // Guaranteed by SimpleQsort.
             auto udiff = static_cast<uoffset_t>(diff);
             a->o = EndianScalar(ReadScalar<uoffset_t>(a) - udiff);
             b->o = EndianScalar(ReadScalar<uoffset_t>(b) + udiff);
@@ -2170,8 +2170,8 @@ CheckedError Parser::StartStruct(const std::string &name, StructDef **dest) {
   return NoError();
 }
 
-CheckedError Parser::CheckClash(std::vector<FieldDef *> &fields,
-                                StructDef *struct_def, const char *suffix,
+CheckedError Parser::CheckClash(const std::vector<FieldDef *> &fields,
+                                const StructDef *struct_def, const char *suffix,
                                 BaseType basetype) {
   auto len = strlen(suffix);
   for (auto it = fields.begin(); it != fields.end(); ++it) {
@@ -2809,6 +2809,7 @@ bool Parser::Parse(const char *source, const char **include_paths,
 CheckedError Parser::StartParseFile(const char *source,
                                     const char *source_filename) {
   file_being_parsed_ = source_filename ? source_filename : "";
+  file_being_parsed_abs_ = flatbuffers::AbsolutePath(file_being_parsed_);
   source_ = source;
   ResetState(source_);
   error_.clear();

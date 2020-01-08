@@ -67,7 +67,9 @@ if(NOT DEFINED FLATBUFFERS_LOCALE_INDEPENDENT)
 endif()
 add_definitions(-DFLATBUFFERS_LOCALE_INDEPENDENT=$<BOOL:${FLATBUFFERS_LOCALE_INDEPENDENT}>)
 
-set(FlatBuffers_Library_SRCS
+# Core library without platform dependent code.
+# With util_stub can parse in-memory fbs and json.
+set(FlatBuffers_Core_Library_SRCS
   include/flatbuffers/base.h
   include/flatbuffers/flatbuffers.h
   include/flatbuffers/hash.h
@@ -83,6 +85,13 @@ set(FlatBuffers_Library_SRCS
   src/idl_gen_text.cpp
   src/reflection.cpp
   src/util.cpp
+)
+
+# Full featured library.
+set(FlatBuffers_Library_SRCS
+  ${FlatBuffers_Core_Library_SRCS}
+  include/flatbuffers/registry.h
+  src/util_io.cpp # Platform dependent code (file read/write, etc).
 )
 
 set(FlatBuffers_Compiler_SRCS
@@ -459,6 +468,53 @@ if(FLATBUFFERS_BUILD_TESTS)
       add_fsanitize_to_target(flattests_cpp17 ${FLATBUFFERS_CODE_SANITIZE})
     endif()
   endif(FLATBUFFERS_BUILD_CPP17)
+endif()
+
+if(YES AND (NOT WIN32) AND FLATBUFFERS_BUILD_TESTS)
+  function(convert_to_array input_file output_file)
+    get_filename_component(wrk_dir ${input_file} DIRECTORY)
+    get_filename_component(fname ${input_file} NAME)
+    add_custom_command(
+      OUTPUT ${output_file}
+      COMMAND bash -c "xxd -i ${fname} ${output_file}"
+      DEPENDS generated_code
+      WORKING_DIRECTORY ${wrk_dir}
+      COMMENT "Run generation: ${output_file}"
+    )
+  endfunction(convert_to_array)
+
+  function(convert_to_zstr input_file output_file)
+    get_filename_component(str_name ${output_file} NAME_WE)
+    add_custom_command(
+      OUTPUT ${output_file}
+      COMMAND echo "const char* ${str_name} = u8R\"(" > ${output_file}
+      COMMAND cat "${input_file}" >> ${output_file}
+      COMMAND echo ")\";" >> ${output_file}
+      DEPENDS generated_code
+      COMMENT "Run generation: ${output_file}"
+      VERBATIM
+    )
+  endfunction(convert_to_zstr)
+
+  # Generate bfbs-envelope for embedding into the project.
+  convert_to_array(${CMAKE_CURRENT_BINARY_DIR}/samples/monster.bfbs
+      ${CMAKE_CURRENT_BINARY_DIR}/samples/monster_bfbs.opendb)
+  # Generate envelops for json to simulate network playload.
+  convert_to_zstr(${CMAKE_CURRENT_BINARY_DIR}/samples/monsterdata.json
+      ${CMAKE_CURRENT_BINARY_DIR}/samples/monsterdata_json_wire.txt)
+
+  set(FlatBuffers_Sample_Compact_SRCS
+    ${FlatBuffers_Core_Library_SRCS}
+    samples/sample_compact.cpp
+    ${CMAKE_CURRENT_BINARY_DIR}/samples/monster_generated.h
+    ${CMAKE_CURRENT_BINARY_DIR}/samples/monster_bfbs.opendb
+    ${CMAKE_CURRENT_BINARY_DIR}/samples/monsterdata_json_wire.txt
+  )
+  add_executable(flatsamplecompact ${FlatBuffers_Sample_Compact_SRCS})
+  add_dependencies(flatsamplecompact generated_code)
+  # Don't use std::sstream!
+  target_compile_definitions(flatsamplecompact PRIVATE FLATBUFFERS_PREFER_PRINTF)
+  target_include_directories(flatsamplecompact PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/samples)
 endif()
 
 if(FLATBUFFERS_BUILD_GRPCTEST)

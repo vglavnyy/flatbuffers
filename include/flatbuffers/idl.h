@@ -914,8 +914,8 @@ class Parser : public ParserState {
                                     const char **include_paths,
                                     const char *source_filename,
                                     const char *include_filename);
-  FLATBUFFERS_CHECKED_ERROR CheckClash(std::vector<FieldDef *> &fields,
-                                       StructDef *struct_def,
+  FLATBUFFERS_CHECKED_ERROR CheckClash(const std::vector<FieldDef *> &fields,
+                                       const StructDef *struct_def,
                                        const char *suffix, BaseType baseType);
 
   bool SupportsAdvancedUnionFeatures() const;
@@ -955,6 +955,7 @@ class Parser : public ParserState {
   const char *source_;
 
   std::string file_being_parsed_;
+  std::string file_being_parsed_abs_;
 
   std::vector<std::pair<Value, FieldDef *>> field_stack_;
 

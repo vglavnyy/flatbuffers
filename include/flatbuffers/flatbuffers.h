@@ -1131,7 +1131,7 @@ class FlatBufferBuilder {
   }
 
   ~FlatBufferBuilder() {
-    if (string_pool) delete string_pool;
+    delete string_pool;
   }
 
   void Reset() {

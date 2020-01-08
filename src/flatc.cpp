@@ -56,6 +56,33 @@ void FlatCompiler::Error(const std::string &err, bool usage,
   params_.error_fn(this, err, usage, show_exe_name);
 }
 
+// Wraps a string to a maximum length, inserting new lines where necessary. Any
+// existing whitespace will be collapsed down to a single space. A prefix or
+// suffix can be provided, which will be inserted before or after a wrapped
+// line, respectively.
+static std::string WordWrap(const std::string &in, size_t max_length,
+                            const std::string &wrapped_line_prefix,
+                            const std::string &wrapped_line_suffix) {
+  std::istringstream in_stream(in);
+  std::string wrapped, line, word;
+
+  in_stream >> word;
+  line = word;
+
+  while (in_stream >> word) {
+    if ((line.length() + 1 + word.length() + wrapped_line_suffix.length()) <
+        max_length) {
+      line += " " + word;
+    } else {
+      wrapped += line + wrapped_line_suffix + "\n";
+      line = wrapped_line_prefix + word;
+    }
+  }
+  wrapped += line;
+
+  return wrapped;
+}
+
 std::string FlatCompiler::GetUsageString(const char *program_name) const {
   std::stringstream ss;
   ss << "Usage: " << program_name << " [OPTION]... FILE... [-- FILE...]\n";

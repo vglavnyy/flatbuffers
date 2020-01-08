@@ -106,4 +106,14 @@ inline void TestEq<std::string, std::string>(std::string expval,
   }
 }
 
+// Change th global C-locale to locale with name <locale_name>.
+// Returns an actual locale name in <_value>, useful if locale_name is "" or
+// null.
+bool SetGlobalTestLocale(const std::string &locale_name,
+                         std::string *_value = nullptr);
+
+// Read (or test) a value of environment variable.
+bool ReadEnvironmentVariable(const char *var_name,
+                             std::string *_value = nullptr);
+
 #endif  // !TEST_ASSERT_H

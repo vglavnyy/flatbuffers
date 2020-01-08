@@ -7,6 +7,8 @@
 #  include <windows.h>
 #endif
 
+#include <clocale>
+
 int testing_fails = 0;
 static TestFailEventListener fail_listener_ = nullptr;
 
@@ -26,7 +28,9 @@ void TestFail(const char *expval, const char *val, const char *exp,
 
 void TestEqStr(const char *expval, const char *val, const char *exp,
                const char *file, int line, const char *func) {
-  if (strcmp(expval, val) != 0) { TestFail(expval, val, exp, file, line, func); }
+  if (strcmp(expval, val) != 0) {
+    TestFail(expval, val, exp, file, line, func);
+  }
 }
 
 #if defined(FLATBUFFERS_MEMORY_LEAK_TRACKING) && defined(_MSC_VER) && \
@@ -66,4 +70,31 @@ int CloseTestEngine(bool force_report) {
 #endif
   }
   return (0 != testing_fails);
+}
+
+// Remove paired quotes in a string: "text"|'text' -> text.
+static std::string RemoveStringQuotes(const std::string &s) {
+  auto ch = *s.c_str();
+  return ((s.size() >= 2) && (ch == '\"' || ch == '\'') &&
+          (ch == flatbuffers::string_back(s)))
+             ? s.substr(1, s.length() - 2)
+             : s;
+}
+
+bool SetGlobalTestLocale(const std::string &locale_name, std::string *_value) {
+  auto locale = RemoveStringQuotes(locale_name);
+  const auto the_locale = setlocale(LC_ALL, locale.c_str());
+  if (!the_locale) return false;
+  if (_value) *_value = std::string(the_locale);
+  return true;
+}
+
+bool ReadEnvironmentVariable(const char *var_name, std::string *_value) {
+#ifdef _MSC_VER
+  __pragma(warning(disable : 4996));  // _CRT_SECURE_NO_WARNINGS
+#endif
+  auto env_str = std::getenv(var_name);
+  if (!env_str) return false;
+  if (_value) *_value = std::string(env_str);
+  return true;
 }
