@@ -408,7 +408,7 @@ CheckedError Parser::Next() {
             !ValidateUTF8(attribute_)) {
           return Error("illegal UTF-8 sequence");
         }
-        token_ = kTokenStringConstant; // '' or "" quoted string
+        token_ = kTokenStringConstant;  // '' or "" quoted string
         return NoError();
       }
       case '/':
@@ -990,27 +990,9 @@ CheckedError Parser::ParseAnyValue(Value &val, FieldDef *field,
       break;
     }
     case BASE_TYPE_VECTOR: {
-      if (Is('[')) {
-        uoffset_t off;
-        ECHECK(ParseVector(val.type.VectorType(), &off, field, parent_fieldn));
-        val.constant = NumToString(off);
-      } else if (token_ == kTokenStringConstant) {
-        if (IsBase64(field)) {
-          uoffset_t off;
-          if (ParseBase64Vector(attribute_, field, &off, &builder_)) {
-            val.constant = NumToString(off);
-            NEXT();
-          } else {
-            return Error("An invalid base64 string");
-          }
-        } else {
-          return Error(
-              "Only [ubyte] array with (base64) or (base64url) attribute can "
-              "be initialized with a string");
-        }
-      } else {
-        EXPECT('[');
-      }
+      uoffset_t off;
+      ECHECK(ParseVector(val.type.VectorType(), &off, field, parent_fieldn));
+      val.constant = NumToString(off);
       break;
     }
     case BASE_TYPE_ARRAY: {
@@ -1187,7 +1169,7 @@ CheckedError Parser::ParseTable(const StructDef &struct_def, std::string *value,
       if (!struct_def.sortbysize ||
           size == SizeOf(field_value.type.base_type)) {
         switch (field_value.type.base_type) {
-          // clang-format off
+// clang-format off
           #define FLATBUFFERS_TD(ENUM, IDLTYPE, CTYPE, ...) \
             case BASE_TYPE_ ## ENUM: \
               builder_.Pad(field->padding); \
@@ -1301,6 +1283,19 @@ void SimpleQsort(T *begin, T *end, size_t width, F comparator, S swapper) {
 
 CheckedError Parser::ParseVector(const Type &type, uoffset_t *ovalue,
                                  FieldDef *field, size_t fieldn) {
+  if (token_ == kTokenStringConstant) {
+    const auto b64mode = GetBase64Mode(field);
+    if (attr_is_trivial_ascii_string_ && !!b64mode) {
+      if (false == ParseBase64Vector(b64mode, attribute_, &builder_, ovalue))
+        return Error("An invalid base64 string");
+      NEXT();
+      return NoError();
+    }
+    return Error(
+        "Only [ubyte] array with (base64) or (base64url) attribute can "
+        "be initialized by ASCII-string literal.");
+  }
+
   uoffset_t count = 0;
   auto err = ParseVectorDelimiters(count, [&](uoffset_t &) -> CheckedError {
     Value val;
@@ -1319,7 +1314,7 @@ CheckedError Parser::ParseVector(const Type &type, uoffset_t *ovalue,
     // start at the back, since we're building the data backwards.
     auto &val = field_stack_.back().first;
     switch (val.type.base_type) {
-      // clang-format off
+// clang-format off
       #define FLATBUFFERS_TD(ENUM, IDLTYPE, CTYPE,...) \
         case BASE_TYPE_ ## ENUM: \
           if (IsStruct(val.type)) SerializeStruct(*val.type.struct_def, val); \
@@ -1680,7 +1675,7 @@ CheckedError Parser::ParseSingleValue(const std::string *name, Value &e,
     double x, y = 0.0;
     ECHECK(atot(e.constant.c_str(), *this, &x));
     auto func_match = false;
-    // clang-format off
+// clang-format off
     #define FLATBUFFERS_FN_DOUBLE(name, op) \
       if (!func_match && functionname == name) { y = op; func_match = true; }
     FLATBUFFERS_FN_DOUBLE("deg", x / kPi * 180);
@@ -1705,7 +1700,7 @@ CheckedError Parser::ParseSingleValue(const std::string *name, Value &e,
 
   auto match = false;
   const auto in_type = e.type.base_type;
-  // clang-format off
+// clang-format off
   #define IF_ECHECK_(force, dtoken, check, req)    \
     if (!match && ((check) || IsConstTrue(force))) \
     ECHECK(TryTypedValue(name, dtoken, check, e, req, &match))
@@ -3251,8 +3246,8 @@ Offset<reflection::Field> FieldDef::Serialize(FlatBufferBuilder *builder,
       // Is uint64>max(int64) tested?
       IsInteger(value.type.base_type) ? StringToInt(value.constant.c_str()) : 0,
       // result may be platform-dependent if underlying is float (not double)
-      IsFloat(value.type.base_type) ? d : 0.0,
-      deprecated, required, key, attr__, docs__);
+      IsFloat(value.type.base_type) ? d : 0.0, deprecated, required, key,
+      attr__, docs__);
   // TODO: value.constant is almost always "0", we could save quite a bit of
   // space by sharing it. Same for common values of value.type.
 }

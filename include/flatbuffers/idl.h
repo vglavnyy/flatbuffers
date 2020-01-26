@@ -91,7 +91,7 @@ switch (type) {
 }
 */
 
-// If not all FLATBUFFERS_GEN_() arguments are necessary for implementation 
+// If not all FLATBUFFERS_GEN_() arguments are necessary for implementation
 // of FLATBUFFERS_TD, you can use a variadic macro (with __VA_ARGS__ if needed).
 // In the above example, only CTYPE is used to generate the code, it can be rewritten:
 
@@ -555,7 +555,6 @@ struct IDLOptions {
   std::string root_type;
   bool force_defaults;
   bool java_primitive_has_method;
-  bool base64_cancel_padding;
   std::vector<std::string> cpp_includes;
   std::string cpp_std;
   std::string proto_namespace_suffix;
@@ -640,7 +639,6 @@ struct IDLOptions {
         size_prefixed(false),
         force_defaults(false),
         java_primitive_has_method(false),
-        base64_cancel_padding(false),
         lang(IDLOptions::kJava),
         mini_reflect(IDLOptions::kNone),
         lang_to_generate(0),

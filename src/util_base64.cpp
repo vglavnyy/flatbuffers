@@ -1,4 +1,5 @@
 #include "flatbuffers/util_base64.h"
+
 #include "flatbuffers/base.h"
 
 namespace flatbuffers {
@@ -43,20 +44,26 @@ namespace flatbuffers {
         Z, Z, Z, Z, Z, Z, Z, Z, Z, Z, Z, Z, Z, Z, Z, Z, Z, Z, Z, Z, Z, Z       \
   }
 
-// Encode [ubyte] array to base64 string.
-bool PrintBase64Vector(const Vector<uint8_t> &vec, const IDLOptions &opts,
-                       std::string *_text, const FieldDef *fd) {
-  // Encode tables.
-  static const char std_encode_table[64] = B64_ENCODE_TABLE(0);
-  static const char url_encode_table[64] = B64_ENCODE_TABLE(1);
+// Set an invalid value to 0x80, and use bit7 as error flag.
+static const uint8_t std_decode_table[256] = B64_DECODE_TABLE(0, 0x80, 0);
+static const uint8_t url_decode_table[256] = B64_DECODE_TABLE(1, 0x80, 0);
+static const char std_encode_table[64] = B64_ENCODE_TABLE(0);
+static const char url_encode_table[64] = B64_ENCODE_TABLE(1);
 
-  const auto src_size = vec.size();
-  const auto b64mode = GetBase64Mode(fd);
-  if ((0 == src_size) || (kBase64ModeNotSet == b64mode)) return false;
+// Encode [ubyte] array to base64 string.
+bool PrintBase64Vector(Base64Mode b64mode, const uint8_t *src, size_t src_size,
+                       std::string *_text) {
+  auto &text = *_text;
+  if (Base64ModeNotSet == b64mode) return false;
+  if (0 == src_size) {
+    text += '\"';  // open the string
+    text += '\"';  // close the string
+    return true;
+  }
 
   const auto b64_tbl =
-      (b64mode == kBase64ModeStandard) ? std_encode_table : url_encode_table;
-  std::string &text = *_text;
+      (b64mode == Base64ModeStandard) ? std_encode_table : url_encode_table;
+
   text += '\"';  // open string
 
   // The base64 encoder transforms 3 data bytes to 4 encoded characters.
@@ -66,7 +73,6 @@ bool PrintBase64Vector(const Vector<uint8_t> &vec, const IDLOptions &opts,
   const auto B3rem = src_size % 3;
   FLATBUFFERS_ASSERT((B3full * 3 + B3rem) == src_size);
 
-  const uint8_t *src = vec.data();
   for (auto k = B3full * 0; k < B3full; k++, src += 3) {
     text += b64_tbl[src[0] >> 2];
     text += b64_tbl[(0x3F & (src[0] << 4)) | (src[1] >> 4)];
@@ -74,21 +80,16 @@ bool PrintBase64Vector(const Vector<uint8_t> &vec, const IDLOptions &opts,
     text += b64_tbl[0x3F & src[2]];
   }
 
-  auto cancel_pad =
-      opts.base64_cancel_padding && (b64mode == kBase64ModeUrlSafe);
-
   if (B3rem == 1) {
     text += b64_tbl[src[0] >> 2];
     text += b64_tbl[(0x3F & (src[0] << 4)) | (0 >> 4)];
-    if (false == cancel_pad) {
-      text += '=';
-      text += '=';
-    }
+    text += '=';
+    text += '=';
   } else if (B3rem == 2) {
     text += b64_tbl[src[0] >> 2];
     text += b64_tbl[(0x3F & (src[0] << 4)) | (src[1] >> 4)];
     text += b64_tbl[(0x3F & (src[1] << 2)) | (0 >> 6)];
-    if (false == cancel_pad) { text += '='; }
+    text += '=';
   }
 
   text += '\"';  // close string
@@ -96,17 +97,12 @@ bool PrintBase64Vector(const Vector<uint8_t> &vec, const IDLOptions &opts,
 }
 
 // Decode [ubyte] array from base64 string.
-bool ParseBase64Vector(const std::string &text, const FieldDef *fd,
-                       uoffset_t *ovalue, FlatBufferBuilder *_builder) {
-  // Set an invalid value to 0x80, and use bit7 as error flag.
-  static const uint8_t std_decode_table[256] = B64_DECODE_TABLE(0, 0x80, 0);
-  static const uint8_t url_decode_table[256] = B64_DECODE_TABLE(1, 0x80, 0);
-
-  const auto b64mode = GetBase64Mode(fd);
-  if (kBase64ModeNotSet == b64mode) return false;
+bool ParseBase64Vector(Base64Mode b64mode, const std::string &text,
+                       FlatBufferBuilder *_builder, uoffset_t *_ofs) {
+  if (Base64ModeNotSet == b64mode) return false;
 
   const auto b64_tbl =
-      (b64mode == kBase64ModeStandard) ? std_decode_table : url_decode_table;
+      (b64mode == Base64ModeStandard) ? std_decode_table : url_decode_table;
 
   auto src = text.c_str();
   auto src_size = text.size();
@@ -131,7 +127,8 @@ bool ParseBase64Vector(const std::string &text, const FieldDef *fd,
 
   // Create Vector<uint8_t>.
   uint8_t *dst = nullptr;
-  *ovalue = _builder->CreateUninitializedVector(dest_size, 1, &dst);
+  *_ofs = _builder->CreateUninitializedVector(dest_size, 1, &dst);
+  if (!dst) return false;  // not enough memory
 
   for (auto k = C4full * 0; k < C4full; k++) {
     uint8_t a0 = b64_tbl[static_cast<uint8_t>(src[0])];

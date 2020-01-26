@@ -20,6 +20,7 @@
 #include "flatbuffers/flexbuffers.h"
 #include "flatbuffers/idl.h"
 #include "flatbuffers/util.h"
+#include "flatbuffers/util_base64.h"
 
 namespace flatbuffers {
 
@@ -101,6 +102,14 @@ struct JsonPrinter {
   bool PrintContainer(PrintScalarTag, const Container &c, size_t size,
                       const Type &type, int indent, const uint8_t *) {
     const auto elem_indent = indent + Indent();
+    // Vector or Array of uint8 can be printed as base64 string.
+    if (flatbuffers::is_same<decltype(c[0]), uint8_t>::value) {
+      const auto b64mode = GetBase64Mode(field_def_);
+      if (!!b64mode) {
+        return PrintBase64Vector(b64mode, c.Data(), size, &text);
+      }
+    }
+
     text += '[';
     AddNewLine();
     for (uoffset_t i = 0; i < size; i++) {
@@ -248,6 +257,7 @@ struct JsonPrinter {
   template<typename T>
   bool GenField(const FieldDef &fd, const Table *table, bool fixed,
                 int indent) {
+    FieldDefLocal fd_local(*this, &fd);  // push to the call-stack
     return PrintScalar(
         fixed ? reinterpret_cast<const Struct *>(table)->GetField<T>(
                     fd.value.offset)
@@ -259,6 +269,7 @@ struct JsonPrinter {
   bool GenFieldOffset(const FieldDef &fd, const Table *table, bool fixed,
                       int indent, const uint8_t *prev_val) {
     const void *val = nullptr;
+    FieldDefLocal fd_local(*this, &fd);  // push to the call-stack
     if (fixed) {
       // The only non-scalar fields in structs are structs or arrays.
       FLATBUFFERS_ASSERT(IsStruct(fd.value.type) || IsArray(fd.value.type));
@@ -341,12 +352,24 @@ struct JsonPrinter {
   }
 
   JsonPrinter(const Parser &parser, std::string &dest)
-      : opts(parser.opts), text(dest) {
+      : opts(parser.opts), text(dest), field_def_(nullptr) {
     text.reserve(1024);  // Reduce amount of inevitable reallocs.
   }
 
+  // RAII for JsonPrinter::field_def_.
+  struct FieldDefLocal {
+    FieldDefLocal(JsonPrinter &prn, const FieldDef *local_fd)
+        : printer(prn), saved_fd(prn.field_def_) {
+      printer.field_def_ = local_fd;  // apply the local
+    }
+    ~FieldDefLocal() { printer.field_def_ = saved_fd; }
+    JsonPrinter &printer;
+    const FieldDef *saved_fd;
+  };
+
   const IDLOptions &opts;
   std::string &text;
+  const FieldDef *field_def_;  // gives access to attributes
 };
 
 static bool GenerateTextImpl(const Parser &parser, const Table *table,
@@ -354,6 +377,7 @@ static bool GenerateTextImpl(const Parser &parser, const Table *table,
   JsonPrinter printer(parser, *_text);
   if (!printer.GenStruct(struct_def, table, 0)) { return false; }
   printer.AddNewLine();
+  FLATBUFFERS_ASSERT(nullptr == printer.field_def_);
   return true;
 }
 

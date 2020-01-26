@@ -11,17 +11,10 @@ namespace flatbuffers {
 // Only is used for versions with optimization.
 static inline uint32_t Base64ByteSwap32(uint32_t v) {
 #if FLATBUFFERS_LITTLEENDIAN
-#  if defined(__GNUC__) || defined(__clang__)
-  return __builtin_bswap32(v);
-#  elif defined(_MSC_VER)
-  return _byteswap_ulong(v);
-#  else
-  return (((v >> 0) & 0xFF) << 24) | (((v >> 8) & 0xFF) << 16) |
-         (((v >> 16) & 0xFF) << 8) | (((v >> 24) & 0xFF) << 0);
-#  endif
-#else   // FLATBUFFERS_LITTLEENDIAN
+  return EndianSwap(v);
+#else
   return v;
-#endif  // FLATBUFFERS_LITTLEENDIAN
+#endif
 }
 
 // M=0: Standard base64 encode table (RFC 4648).
@@ -64,21 +57,26 @@ static inline uint32_t Base64ByteSwap32(uint32_t v) {
         Z, Z, Z, Z, Z, Z, Z, Z, Z, Z, Z, Z, Z, Z, Z, Z, Z, Z, Z, Z, Z, Z       \
   }
 
-// Encode [ubyte] array to base64 string.
-bool PrintBase64Vector(const Vector<uint8_t> &vec, const IDLOptions &opts,
-                       std::string *_text, const FieldDef *fd) {
-  static const char std_encode_table[64] = B64_ENCODE_TABLE(0);
-  static const char url_encode_table[64] = B64_ENCODE_TABLE(1);
+// Set an invalid value to 0x1, and use bit0 as error flag.
+static const uint8_t std_decode_table[256] = B64_DECODE_TABLE(0, 1u, 1u);
+static const uint8_t url_decode_table[256] = B64_DECODE_TABLE(1, 1u, 1u);
+static const char std_encode_table[64] = B64_ENCODE_TABLE(0);
+static const char url_encode_table[64] = B64_ENCODE_TABLE(1);
 
-  const auto src_size = vec.size();
-  const auto b64mode = GetBase64Mode(fd);
-  if ((0 == src_size) || (kBase64ModeNotSet == b64mode)) return false;
+// Encode [ubyte] array to base64 string.
+bool PrintBase64Vector(Base64Mode b64mode, const uint8_t *src, size_t src_size,
+                       std::string *_text) {
+  auto &text = *_text;
+  if (Base64ModeNotSet == b64mode) return false;
+  if (0 == src_size) {
+    text += '\"';  // open the string
+    text += '\"';  // close the string
+    return true;
+  }
 
   const auto b64_tbl =
-      (b64mode == kBase64ModeStandard) ? std_encode_table : url_encode_table;
+      (b64mode == Base64ModeStandard) ? std_encode_table : url_encode_table;
 
-  auto src = vec.data();
-  auto &text = *_text;
   text += '\"';  // open the string
 
   // Size of remainder, must be > 0.
@@ -131,28 +129,17 @@ bool PrintBase64Vector(const Vector<uint8_t> &vec, const IDLOptions &opts,
   FLATBUFFERS_ASSERT(src_stop == src);
   FLATBUFFERS_ASSERT(dst_stop == dst);
 
-  // Check the base64_cancel_padding and trim the result string.
-  if (opts.base64_cancel_padding && (b64mode == kBase64ModeUrlSafe)) {
-    if ('=' == text.back()) text.pop_back();
-    if ('=' == text.back()) text.pop_back();
-  }
-
-  text += '\"';  // close string
+  text += '\"';  // close the string
   return true;
 }
 
 // Decode [ubyte] array from base64 string.
-bool ParseBase64Vector(const std::string &text, const FieldDef *fd,
-                       uoffset_t *ovalue, FlatBufferBuilder *_builder) {
-  // Set an invalid value to 0x1, and use bit0 as error flag.
-  static const uint8_t std_decode_table[256] = B64_DECODE_TABLE(0, 1u, 1u);
-  static const uint8_t url_decode_table[256] = B64_DECODE_TABLE(1, 1u, 1u);
-
-  const auto b64mode = GetBase64Mode(fd);
-  if (kBase64ModeNotSet == b64mode) return false;
+bool ParseBase64Vector(Base64Mode b64mode, const std::string &text,
+                       FlatBufferBuilder *_builder, uoffset_t *_ofs) {
+  if (Base64ModeNotSet == b64mode) return false;
 
   const auto b64_tbl =
-      (b64mode == kBase64ModeStandard) ? std_decode_table : url_decode_table;
+      (b64mode == Base64ModeStandard) ? std_decode_table : url_decode_table;
 
   auto src = text.c_str();
   auto src_size = text.size();
@@ -181,7 +168,8 @@ bool ParseBase64Vector(const std::string &text, const FieldDef *fd,
 
   // Create Vector<uint8_t>.
   uint8_t *dst = nullptr;
-  *ovalue = _builder->CreateUninitializedVector(dest_size, 1, &dst);
+  *_ofs = _builder->CreateUninitializedVector(dest_size, 1, &dst);
+  if (!dst) return false;  // not enough memory
 
   // debug check
   const auto src_stop = src + src_size;
@@ -198,14 +186,14 @@ bool ParseBase64Vector(const std::string &text, const FieldDef *fd,
     uint32_t a3 = b64_tbl[static_cast<uint8_t>(src[3])];
     // The err_mask will be equal to 1, if an error is detected.
     err_mask = (a0 | a1 | a2 | a3) & 1;
-    // Decode by RFC4648 algorithm. Squash 4 symbosl to 3 bytes.
+    // Decode by RFC4648 algorithm. Squash 4 symbols to 3 bytes.
     uint32_t v = (a0 << (8 + 18 - 1)) | (a1 << (8 + 12 - 1)) |
                  (a2 << (8 + 6 - 1)) | (a3 << (8 - 1));
     v = Base64ByteSwap32(v);
     // C4rem > 0, it allows to write 4 bytes per round without violations.
-    std::memcpy(dst, &v, 4);  // one write op the unaligned is allowed.
-    dst += 3;
+    std::memcpy(dst, &v, 4);  // one write op
     src += 4;
+    dst += 3;
   }
 
   // Process the remainder.
