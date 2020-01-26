@@ -35,7 +35,7 @@ const char *FLATBUFFERS_VERSION() {
   // clang-format on
 }
 
-const double kPi = 3.14159265358979323846;
+static FLATBUFFERS_CONSTEXPR double kPi = 3.14159265358979323846;
 
 // clang-format off
 const char *const kTypeNames[] = {
@@ -109,8 +109,8 @@ std::string MakeScreamingCamel(const std::string &in) {
   return s;
 }
 
-void DeserializeDoc(std::vector<std::string> &doc,
-                    const Vector<Offset<String>> *documentation) {
+static void DeserializeDoc(std::vector<std::string> &doc,
+                           const Vector<Offset<String>> *documentation) {
   if (documentation == nullptr) return;
   for (uoffset_t index = 0; index < documentation->size(); index++)
     doc.push_back(documentation->Get(index)->str());
@@ -139,7 +139,7 @@ CheckedError Parser::Error(const std::string &msg) {
   return CheckedError(true);
 }
 
-inline CheckedError NoError() { return CheckedError(false); }
+static inline CheckedError NoError() { return CheckedError(false); }
 
 CheckedError Parser::RecurseError() {
   return Error("maximum parsing recursion of " +
@@ -155,25 +155,28 @@ template<typename F> CheckedError Parser::Recurse(F f) {
   return ce;
 }
 
-template<typename T> std::string TypeToIntervalString() {
+template<typename T> static std::string TypeToIntervalString() {
   return "[" + NumToString((flatbuffers::numeric_limits<T>::lowest)()) + "; " +
          NumToString((flatbuffers::numeric_limits<T>::max)()) + "]";
 }
 
 // atot: template version of atoi/atof: convert a string to an instance of T.
 template<typename T>
-inline CheckedError atot(const char *s, Parser &parser, T *val) {
+static inline CheckedError atot(const std::string &str, Parser &parser,
+                                T *val) {
+  auto s = str.c_str();
   auto done = StringToNumber(s, val);
   if (done) return NoError();
   if (0 == *val)
-    return parser.Error("invalid number: \"" + std::string(s) + "\"");
+    return parser.Error("invalid number: \"" + str + "\"");
   else
-    return parser.Error("invalid number: \"" + std::string(s) + "\"" +
+    return parser.Error("invalid number: \"" + str + "\"" +
                         ", constant does not fit " + TypeToIntervalString<T>());
 }
 template<>
-inline CheckedError atot<Offset<void>>(const char *s, Parser &parser,
+inline CheckedError atot<Offset<void>>(const std::string &str, Parser &parser,
                                        Offset<void> *val) {
+  auto s = str.c_str();
   (void)parser;
   *val = Offset<void>(atoi(s));
   return NoError();
@@ -299,12 +302,20 @@ CheckedError Parser::Next() {
       case '\"':
       case '\'': {
         int unicode_high_surrogate = -1;
-
+        int ascii_sum = 0;
+        auto cursor_start = cursor_;
         while (*cursor_ != c) {
-          if (*cursor_ < ' ' && static_cast<signed char>(*cursor_) >= 0)
-            return Error("illegal character in string constant");
-          if (*cursor_ == '\\') {
-            attr_is_trivial_ascii_string_ = false;  // has escape sequence
+          if (*cursor_ != '\\') {  // most likely
+            const auto u = static_cast<unsigned char>(*cursor_);
+            cursor_++;
+            ascii_sum |= (static_cast<int>('~') - u);
+            // Reject controls.
+            if (u < static_cast<unsigned char>(' '))
+              return Error("illegal character in string constant");
+          } else {
+            ascii_sum = -1;  // has escape sequence
+            if (cursor_start != cursor_)
+              attribute_.append(cursor_start, cursor_);  // flush observed
             cursor_++;
             if (unicode_high_surrogate != -1 && *cursor_ != 'u') {
               return Error(
@@ -363,7 +374,11 @@ CheckedError Parser::Next() {
                     return Error(
                         "illegal Unicode sequence (multiple high surrogates)");
                   } else {
+                    // never overflow [0xD800, 0xDBFF]
                     unicode_high_surrogate = static_cast<int>(val);
+                    if (*cursor_ != '\\')
+                      return Error(
+                          "illegal Unicode sequence (unpaired high surrogate)");
                   }
                 } else if (val >= 0xDC00 && val <= 0xDFFF) {
                   if (unicode_high_surrogate == -1) {
@@ -387,27 +402,18 @@ CheckedError Parser::Next() {
               }
               default: return Error("unknown escape code in string constant");
             }
-          } else {  // printable chars + UTF-8 bytes
-            if (unicode_high_surrogate != -1) {
-              return Error(
-                  "illegal Unicode sequence (unpaired high surrogate)");
-            }
-            // reset if non-printable
-            attr_is_trivial_ascii_string_ &=
-                check_ascii_range(*cursor_, ' ', '~');
-
-            attribute_ += *cursor_++;
+            cursor_start = cursor_;  // restart
           }
         }
-        if (unicode_high_surrogate != -1) {
-          return Error("illegal Unicode sequence (unpaired high surrogate)");
-        }
+        FLATBUFFERS_ASSERT(unicode_high_surrogate == -1);
+        attr_is_trivial_ascii_string_ = (ascii_sum > 0);
+        attribute_.append(cursor_start, cursor_);
         cursor_++;
         if (!attr_is_trivial_ascii_string_ && !opts.allow_non_utf8 &&
             !ValidateUTF8(attribute_)) {
           return Error("illegal UTF-8 sequence");
         }
-        token_ = kTokenStringConstant;
+        token_ = kTokenStringConstant;  // '' or "" quoted string
         return NoError();
       }
       case '/':
@@ -879,9 +885,10 @@ CheckedError Parser::ParseField(StructDef &struct_def) {
 }
 
 CheckedError Parser::ParseString(Value &val) {
-  auto s = attribute_;
+  uoffset_t ofs =
+      Is(kTokenStringConstant) ? builder_.CreateString(attribute_).o : 0;
   EXPECT(kTokenStringConstant);
-  val.constant = NumToString(builder_.CreateString(s).o);
+  val.constant = NumToString(ofs);
   return NoError();
 }
 
@@ -909,7 +916,7 @@ CheckedError Parser::ParseAnyValue(Value &val, FieldDef *field,
                 type.element == BASE_TYPE_UTYPE) {
               // Vector of union type field.
               uoffset_t offset;
-              ECHECK(atot(elem->first.constant.c_str(), *this, &offset));
+              ECHECK(atot(elem->first.constant, *this, &offset));
               vector_of_union_types = reinterpret_cast<Vector<uint8_t> *>(
                   builder_.GetCurrentBufferPointer() + builder_.GetSize() -
                   offset);
@@ -960,7 +967,7 @@ CheckedError Parser::ParseAnyValue(Value &val, FieldDef *field,
       if (vector_of_union_types) {
         enum_idx = vector_of_union_types->Get(count);
       } else {
-        ECHECK(atot(constant.c_str(), *this, &enum_idx));
+        ECHECK(atot(constant, *this, &enum_idx));
       }
       auto enum_val = val.type.enum_def->ReverseLookup(enum_idx, true);
       if (!enum_val) return Error("illegal type id for: " + field->name);
@@ -1166,19 +1173,19 @@ CheckedError Parser::ParseTable(const StructDef &struct_def, std::string *value,
       auto field = it->second;
       if (!struct_def.sortbysize ||
           size == SizeOf(field_value.type.base_type)) {
+        // clang-format off
         switch (field_value.type.base_type) {
-          // clang-format off
           #define FLATBUFFERS_TD(ENUM, IDLTYPE, CTYPE, ...) \
             case BASE_TYPE_ ## ENUM: \
               builder_.Pad(field->padding); \
               if (struct_def.fixed) { \
                 CTYPE val; \
-                ECHECK(atot(field_value.constant.c_str(), *this, &val)); \
+                ECHECK(atot(field_value.constant, *this, &val)); \
                 builder_.PushElement(val); \
               } else { \
                 CTYPE val, valdef; \
-                ECHECK(atot(field_value.constant.c_str(), *this, &val)); \
-                ECHECK(atot(field->value.constant.c_str(), *this, &valdef)); \
+                ECHECK(atot(field_value.constant, *this, &val)); \
+                ECHECK(atot(field->value.constant, *this, &valdef)); \
                 builder_.AddElement(field_value.offset, val, valdef); \
               } \
               break;
@@ -1191,7 +1198,7 @@ CheckedError Parser::ParseTable(const StructDef &struct_def, std::string *value,
                 SerializeStruct(*field->value.type.struct_def, field_value); \
               } else { \
                 CTYPE val; \
-                ECHECK(atot(field_value.constant.c_str(), *this, &val)); \
+                ECHECK(atot(field_value.constant, *this, &val)); \
                 builder_.AddOffset(field_value.offset, val); \
               } \
               break;
@@ -1203,8 +1210,8 @@ CheckedError Parser::ParseTable(const StructDef &struct_def, std::string *value,
                 reinterpret_cast<const uint8_t*>(field_value.constant.c_str()),
                 InlineSize(field_value.type));
               break;
-            // clang-format on
         }
+        // clang-format on
       }
     }
   }
@@ -1261,7 +1268,8 @@ static bool CompareType(const uint8_t *a, const uint8_t *b, BaseType ftype) {
 
 // See below for why we need our own sort :(
 template<typename T, typename F, typename S>
-void SimpleQsort(T *begin, T *end, size_t width, F comparator, S swapper) {
+static void SimpleQsort(T *begin, T *end, size_t width, F comparator,
+                        S swapper) {
   if (end - begin <= static_cast<ptrdiff_t>(width)) return;
   auto l = begin + width;
   auto r = end;
@@ -1298,21 +1306,21 @@ CheckedError Parser::ParseVector(const Type &type, uoffset_t *ovalue,
   for (uoffset_t i = 0; i < count; i++) {
     // start at the back, since we're building the data backwards.
     auto &val = field_stack_.back().first;
+    // clang-format off
     switch (val.type.base_type) {
-      // clang-format off
       #define FLATBUFFERS_TD(ENUM, IDLTYPE, CTYPE,...) \
         case BASE_TYPE_ ## ENUM: \
           if (IsStruct(val.type)) SerializeStruct(*val.type.struct_def, val); \
           else { \
              CTYPE elem; \
-             ECHECK(atot(val.constant.c_str(), *this, &elem)); \
+             ECHECK(atot(val.constant, *this, &elem)); \
              builder_.PushElement(elem); \
           } \
           break;
         FLATBUFFERS_GEN_TYPES(FLATBUFFERS_TD)
       #undef FLATBUFFERS_TD
-      // clang-format on
     }
+    // clang-format on
     field_stack_.pop_back();
   }
 
@@ -1329,7 +1337,7 @@ CheckedError Parser::ParseVector(const Type &type, uoffset_t *ovalue,
         break;
       }
     }
-    assert(key);
+    FLATBUFFERS_ASSERT(key);
     // Now sort it.
     // We can't use std::sort because for structs the size is not known at
     // compile time, and for tables our iterators dereference offsets, so can't
@@ -1379,7 +1387,7 @@ CheckedError Parser::ParseVector(const Type &type, uoffset_t *ovalue,
             // These are serialized offsets, so are relative where they are
             // stored in memory, so compute the distance between these pointers:
             ptrdiff_t diff = (b - a) * sizeof(Offset<Table>);
-            assert(diff >= 0);  // Guaranteed by SimpleQsort.
+            FLATBUFFERS_ASSERT(diff >= 0);  // Guaranteed by SimpleQsort.
             auto udiff = static_cast<uoffset_t>(diff);
             a->o = EndianScalar(ReadScalar<uoffset_t>(a) - udiff);
             b->o = EndianScalar(ReadScalar<uoffset_t>(b) + udiff);
@@ -1420,7 +1428,7 @@ CheckedError Parser::ParseArray(Value &array) {
             SerializeStruct(builder, *val.type.struct_def, val); \
           } else { \
             CTYPE elem; \
-            ECHECK(atot(val.constant.c_str(), *this, &elem)); \
+            ECHECK(atot(val.constant, *this, &elem)); \
             builder.PushElement(elem); \
           } \
         break;
@@ -1626,7 +1634,7 @@ CheckedError Parser::TokenError() {
 }
 
 // Re-pack helper (ParseSingleValue) to normalize defaults of scalars.
-template<typename T> inline void SingleValueRepack(Value &e, T val) {
+template<typename T> static inline void SingleValueRepack(Value &e, T val) {
   // Remove leading zeros.
   if (IsInteger(e.type.base_type)) { e.constant = NumToString(val); }
 }
@@ -1658,9 +1666,9 @@ CheckedError Parser::ParseSingleValue(const std::string *name, Value &e,
     EXPECT(')');
     // calculate with double precision
     double x, y = 0.0;
-    ECHECK(atot(e.constant.c_str(), *this, &x));
-    auto func_match = false;
+    ECHECK(atot(e.constant, *this, &x));
     // clang-format off
+    auto func_match = false;
     #define FLATBUFFERS_FN_DOUBLE(name, op) \
       if (!func_match && functionname == name) { y = op; func_match = true; }
     FLATBUFFERS_FN_DOUBLE("deg", x / kPi * 180);
@@ -1683,9 +1691,9 @@ CheckedError Parser::ParseSingleValue(const std::string *name, Value &e,
     return NoError();
   }
 
+  // clang-format off
   auto match = false;
   const auto in_type = e.type.base_type;
-  // clang-format off
   #define IF_ECHECK_(force, dtoken, check, req)    \
     if (!match && ((check) || IsConstTrue(force))) \
     ECHECK(TryTypedValue(name, dtoken, check, e, req, &match))
@@ -1769,7 +1777,7 @@ CheckedError Parser::ParseSingleValue(const std::string *name, Value &e,
     #define FLATBUFFERS_TD(ENUM, IDLTYPE, CTYPE, ...) \
       case BASE_TYPE_ ## ENUM: {\
           CTYPE val; \
-          ECHECK(atot(e.constant.c_str(), *this, &val)); \
+          ECHECK(atot(e.constant, *this, &val)); \
           SingleValueRepack(e, val); \
         break; }
     FLATBUFFERS_GEN_TYPES_SCALAR(FLATBUFFERS_TD)
@@ -2170,8 +2178,8 @@ CheckedError Parser::StartStruct(const std::string &name, StructDef **dest) {
   return NoError();
 }
 
-CheckedError Parser::CheckClash(std::vector<FieldDef *> &fields,
-                                StructDef *struct_def, const char *suffix,
+CheckedError Parser::CheckClash(const std::vector<FieldDef *> &fields,
+                                const StructDef *struct_def, const char *suffix,
                                 BaseType basetype) {
   auto len = strlen(suffix);
   for (auto it = fields.begin(); it != fields.end(); ++it) {
@@ -3087,12 +3095,12 @@ std::set<std::string> Parser::GetIncludedFilesRecursive(
 
 // Schema serialization functionality:
 
-template<typename T> bool compareName(const T *a, const T *b) {
+template<typename T> static bool compareName(const T *a, const T *b) {
   return a->defined_namespace->GetFullyQualifiedName(a->name) <
          b->defined_namespace->GetFullyQualifiedName(b->name);
 }
 
-template<typename T> void AssignIndices(const std::vector<T *> &defvec) {
+template<typename T> static void AssignIndices(const std::vector<T *> &defvec) {
   // Pre-sort these vectors, such that we can set the correct indices for them.
   auto vec = defvec;
   std::sort(vec.begin(), vec.end(), compareName<T>);
@@ -3231,8 +3239,8 @@ Offset<reflection::Field> FieldDef::Serialize(FlatBufferBuilder *builder,
       // Is uint64>max(int64) tested?
       IsInteger(value.type.base_type) ? StringToInt(value.constant.c_str()) : 0,
       // result may be platform-dependent if underlying is float (not double)
-      IsFloat(value.type.base_type) ? d : 0.0,
-      deprecated, required, key, attr__, docs__);
+      IsFloat(value.type.base_type) ? d : 0.0, deprecated, required, key,
+      attr__, docs__);
   // TODO: value.constant is almost always "0", we could save quite a bit of
   // space by sharing it. Same for common values of value.type.
 }
