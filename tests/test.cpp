@@ -3322,6 +3322,22 @@ void FixedLengthArrayTest() {
 #endif
 }
 
+#if !defined(FLATBUFFERS_SPAN_MINIMAL) && (!defined(_MSC_VER) || _MSC_VER >= 1700)
+void FixedLengthArrayConstructorTest() {
+  int32_t nested_a[2] = { 1, 2 };
+  MyGame::Example::TestEnum nested_c[2] = { MyGame::Example::TestEnum::A,
+                                            MyGame::Example::TestEnum::B };
+  int64_t nested_d[2] = { -2, -1 };
+
+  MyGame::Example::NestedStruct nStruct0(nested_a, MyGame::Example::TestEnum::B,
+    nested_c, flatbuffers::span<int64_t>());
+  MyGame::Example::NestedStruct nStruct1(nested_a, MyGame::Example::TestEnum::B,
+    nested_c, nested_d);
+}
+#else
+void FixedLengthArrayConstructorTest() {}
+#endif
+
 void NativeTypeTest() {
   const int N = 3;
 
@@ -3565,6 +3581,37 @@ void ParseFlexbuffersFromJsonWithNullTest() {
     TEST_EQ(root.ToString(), std::string("{ opt_field: null }"));
   }
 }
+// Run this test only if 'enum class' and 'using typ=expression' are available.
+#if !defined(FLATBUFFERS_SPAN_MINIMAL)
+void FlatbuffersSpanTest() {
+  using flatbuffers::span;
+  span<char, 0> c1;
+  TEST_EQ(c1.size(), 0);
+  span<char, flatbuffers::dynamic_extent> c2;
+  TEST_EQ(c2.size(), 0);
+
+  int i_data[7] = { 0, 1, 2, 3, 4, 5, 6 };
+  span<int, 7> i1(&i_data[0], 7);
+  span<int> i2(i1);  // make dynamic from static
+  TEST_EQ(i1.size(), 7);
+  TEST_EQ(i1.size(), i2.size());
+  // Make const span from non-const
+  span<const int, 7> i3(i1);
+  // Construct from the C-array
+  span<int, 7> i4(i_data);
+  span<const int, 7> i5(i_data);
+  span<int> i6(i_data);
+  span<const int> i7(i_data);
+  TEST_EQ(i7.size(), 7);
+  // Check construction from const array
+  const int i_cdata[5] = { 0 };
+  span<const int, 5> i8(i_cdata);
+  span<const int> i9(i_cdata);
+  TEST_EQ(i9.size(), 5);
+}
+#else
+void FlatbuffersSpanTest() {}
+#endif
 
 int FlatBufferTests() {
   // clang-format off
@@ -3656,6 +3703,7 @@ int FlatBufferTests() {
   NativeTypeTest();
   OptionalScalarsTest();
   ParseFlexbuffersFromJsonWithNullTest();
+  FlatbuffersSpanTest();
   return 0;
 }
 

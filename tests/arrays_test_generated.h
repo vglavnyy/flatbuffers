@@ -92,6 +92,44 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(8) NestedStruct FLATBUFFERS_FINAL_CLASS {
         padding0__(0),
         padding1__(0),
         d_() {
+    (void)padding0__;
+    (void)padding1__;
+
+  }
+  NestedStruct(flatbuffers::span<const int32_t, 2> _a, MyGame::Example::TestEnum _b, flatbuffers::span<const MyGame::Example::TestEnum, 2> _c, flatbuffers::span<const int64_t, 2> _d)
+      : a_(),
+        b_(flatbuffers::EndianScalar(static_cast<int8_t>(_b))),
+        c_(),
+        padding0__(0),
+        padding1__(0),
+        d_() {
+    std::memset(a_, 0, sizeof(a_));
+    (void)_a;
+    std::memset(c_, 0, sizeof(c_));
+    (void)_c;
+    (void)padding0__;
+    (void)padding1__;
+
+    std::memset(d_, 0, sizeof(d_));
+    (void)_d;
+  }
+  template<typename = void>
+  NestedStruct(flatbuffers::span<const int32_t> _a, MyGame::Example::TestEnum _b, flatbuffers::span<const MyGame::Example::TestEnum> _c, flatbuffers::span<const int64_t> _d)
+      : a_(),
+        b_(flatbuffers::EndianScalar(static_cast<int8_t>(_b))),
+        c_(),
+        padding0__(0),
+        padding1__(0),
+        d_() {
+    std::memset(a_, 0, sizeof(a_));
+    (void)_a;
+    std::memset(c_, 0, sizeof(c_));
+    (void)_c;
+    (void)padding0__;
+    (void)padding1__;
+
+    std::memset(d_, 0, sizeof(d_));
+    (void)_d;
   }
   const flatbuffers::Array<int32_t, 2> *a() const {
     return reinterpret_cast<const flatbuffers::Array<int32_t, 2> *>(a_);
@@ -175,6 +213,61 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(8) ArrayStruct FLATBUFFERS_FINAL_CLASS {
         e_(flatbuffers::EndianScalar(_e)),
         padding3__(0),
         f_() {
+    (void)padding0__;
+    (void)padding1__;
+    (void)padding2__;
+
+    (void)padding3__;
+
+  }
+  ArrayStruct(float _a, flatbuffers::span<const int32_t, 15> _b, int8_t _c, flatbuffers::span<const MyGame::Example::NestedStruct, 2> _d, int32_t _e, flatbuffers::span<const int64_t, 2> _f)
+      : a_(flatbuffers::EndianScalar(_a)),
+        b_(),
+        c_(flatbuffers::EndianScalar(_c)),
+        padding0__(0),
+        padding1__(0),
+        padding2__(0),
+        d_(),
+        e_(flatbuffers::EndianScalar(_e)),
+        padding3__(0),
+        f_() {
+    std::memset(b_, 0, sizeof(b_));
+    (void)_b;
+    (void)padding0__;
+    (void)padding1__;
+    (void)padding2__;
+
+    std::memset(d_, 0, sizeof(d_));
+    (void)_d;
+    (void)padding3__;
+
+    std::memset(f_, 0, sizeof(f_));
+    (void)_f;
+  }
+  template<typename = void>
+  ArrayStruct(float _a, flatbuffers::span<const int32_t> _b, int8_t _c, flatbuffers::span<const MyGame::Example::NestedStruct> _d, int32_t _e, flatbuffers::span<const int64_t> _f)
+      : a_(flatbuffers::EndianScalar(_a)),
+        b_(),
+        c_(flatbuffers::EndianScalar(_c)),
+        padding0__(0),
+        padding1__(0),
+        padding2__(0),
+        d_(),
+        e_(flatbuffers::EndianScalar(_e)),
+        padding3__(0),
+        f_() {
+    std::memset(b_, 0, sizeof(b_));
+    (void)_b;
+    (void)padding0__;
+    (void)padding1__;
+    (void)padding2__;
+
+    std::memset(d_, 0, sizeof(d_));
+    (void)_d;
+    (void)padding3__;
+
+    std::memset(f_, 0, sizeof(f_));
+    (void)_f;
   }
   float a() const {
     return flatbuffers::EndianScalar(a_);

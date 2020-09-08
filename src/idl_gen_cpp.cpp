@@ -72,6 +72,13 @@ namespace cpp {
 
 enum CppStandard { CPP_STD_X0 = 0, CPP_STD_11, CPP_STD_17 };
 
+// Define a style of 'struct' constructor if it has 'Array' fields.
+enum GenArrayArgMode {
+  kArrayArgModeNone,        // dont't generate initialization args
+  kArrayArgModeSpanStatic,  // generate ftalbuffers::span<T,N>
+  kArrayArgModeSpanDynamic  // generate ftalbuffers::span<T,dynamic_extent>
+};
+
 // Extension of IDLOptions for cpp-generator.
 struct IDLOptionsCpp : public IDLOptions {
   // All fields start with 'g_' prefix to distinguish from the base IDLOptions.
@@ -818,6 +825,40 @@ class CppGenerator : public BaseGenerator {
     } else {
       return beforeptr + GenTypePointer(type) + afterptr;
     }
+  }
+
+  std::string GenTypeSpan(const Type& type, bool immutable, size_t extent)
+  {
+    // Generate "flatbuffers::span<const U, extent> ".
+    FLATBUFFERS_ASSERT(IsSeries(type) && "unexpected type");
+    auto element_type = type.VectorType();
+    std::string text = "flatbuffers::span<";
+    text += immutable ? "const " : "";
+    if (IsScalar(element_type.base_type)) {
+      text += GenTypeBasic(element_type, true);
+    }
+    else {
+      switch (element_type.base_type) {
+        case BASE_TYPE_STRING: {
+          text += "char";
+          break;
+        }
+        case BASE_TYPE_STRUCT: {
+          FLATBUFFERS_ASSERT(type.struct_def);
+          text += WrapInNameSpace(*type.struct_def);
+          break;
+        }
+        default:
+          FLATBUFFERS_ASSERT(false && "unexpected element's type");
+          break;
+      }
+    }
+    if (extent != flatbuffers::dynamic_extent) {
+      text += ", ";
+      text += NumToString(extent);
+    }
+    text += "> ";
+    return text;
   }
 
   std::string GenEnumValDecl(const EnumDef &enum_def,
@@ -3045,6 +3086,95 @@ class CppGenerator : public BaseGenerator {
     }
   }
 
+  void GenStructConstructor(const StructDef &struct_def,
+                            GenArrayArgMode array_mode) {
+    std::string arg_list;
+    std::string init_list;
+    int padding_id = 0;
+    bool templated = false;
+    auto first = struct_def.fields.vec.begin();
+    for (auto it = struct_def.fields.vec.begin();
+         it != struct_def.fields.vec.end(); ++it) {
+      const auto &field = **it;
+      const auto &field_type = field.value.type;
+      const auto is_array = IsArray(field_type);
+      std::string arg_type;
+      if (!is_array) {
+        arg_type = GenTypeGet(field_type, " ", "const ", " &", true);
+      }
+      else if(array_mode != kArrayArgModeNone){
+        templated = array_mode == kArrayArgModeSpanDynamic;
+        size_t extent = (array_mode == kArrayArgModeSpanStatic)
+                            ? field_type.fixed_length
+                            : flatbuffers::dynamic_extent;
+        arg_type = GenTypeSpan(field_type, true, extent);
+      }
+      const auto member_name = Name(field) + "_";
+      const auto arg_name = "_" + Name(field);
+      // skip array if generate legacy ctor without array assignment
+      auto add_arg_init = !is_array || array_mode != kArrayArgModeNone;
+      if(add_arg_init) {
+        if (it != first && !arg_list.empty()) { arg_list += ", "; }
+        arg_list += arg_type;
+        arg_list += arg_name;
+      }
+      if (it != first && !init_list.empty()) { init_list += ",\n        "; }
+      init_list += member_name;
+      if (IsScalar(field_type.base_type)) {
+        auto type = GenUnderlyingCast(field, false, arg_name);
+        init_list += "(flatbuffers::EndianScalar(" + type + "))";
+      } else {
+        if (add_arg_init && !is_array) {
+          FLATBUFFERS_ASSERT(IsStruct(field_type));
+          init_list += "(" + arg_name + ")";
+        } else {
+          // implicit 0-initialization of array, see GenStructConstructor()
+          init_list += "()";
+        }
+      }
+      if (field.padding) {
+        GenPadding(field, &init_list, &padding_id, PaddingInitializer);
+      }
+    }
+
+    if (!arg_list.empty()) {
+      code_.SetValue("ARG_LIST", arg_list);
+      code_.SetValue("INIT_LIST", init_list);
+      if (!init_list.empty()) {
+        if (templated)
+          code_ += "  template<typename = void>";
+
+        code_ += "  {{STRUCT_NAME}}({{ARG_LIST}})";
+        code_ += "      : {{INIT_LIST}} {";
+      } else {
+        code_ += "  {{STRUCT_NAME}}({{ARG_LIST}}) {";
+      }
+      padding_id = 0;
+      for (auto it = struct_def.fields.vec.begin();
+           it != struct_def.fields.vec.end(); ++it) {
+        const auto &field = **it;
+        const auto &field_type = field.value.type;
+        if (IsArray(field_type) && array_mode != kArrayArgModeNone) {
+          const auto &elem_type = field_type.VectorType();
+          (void)elem_type;
+          FLATBUFFERS_ASSERT(
+              (IsScalar(elem_type.base_type) || IsStruct(elem_type)) &&
+              "invalid declaration");
+          const auto &member = Name(field) + "_";
+          code_ +=
+              "    std::memset(" + member + ", 0, sizeof(" + member + "));";
+          code_ += "    (void)_" + Name(field) + ";"; // stub!
+        }
+        if (field.padding) {
+          std::string padding;
+          GenPadding(field, &padding, &padding_id, PaddingNoop);
+          code_ += padding;
+        }
+      }
+      code_ += "  }";
+    }
+  }
+
   // Generate an accessor struct with constructor for a flatbuffers struct.
   void GenStruct(const StructDef &struct_def) {
     // Generate an accessor struct, with private variables of the form:
@@ -3100,7 +3230,17 @@ class CppGenerator : public BaseGenerator {
 
     // Generate a constructor that takes all fields as arguments,
     // excluding arrays
-    GenStructConstructor(struct_def);
+    GenStructConstructor(struct_def, kArrayArgModeNone);
+
+    auto arrays_num = std::count_if(struct_def.fields.vec.begin(),
+                                    struct_def.fields.vec.end(),
+                                    [](const flatbuffers::FieldDef *fd) {
+                                      return IsArray(fd->value.type);
+                                    });
+    if (arrays_num > 0) {
+      GenStructConstructor(struct_def, kArrayArgModeSpanStatic);
+      GenStructConstructor(struct_def, kArrayArgModeSpanDynamic);
+    }
 
     // Generate accessor methods of the form:
     // type name() const { return flatbuffers::EndianScalar(name_); }
