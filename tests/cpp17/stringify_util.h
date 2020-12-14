@@ -63,6 +63,42 @@ template<typename T> constexpr bool is_fb_vector_v = is_fb_vector<T>::value;
 /*******************************************************************************
 ** Compile-time Iteration & Recursive Stringification over Flatbuffers types.
 *******************************************************************************/
+//template<typename FB, size_t... Indexes>
+//std::string StringifyTableOrStructImpl(const FB &flatbuff,
+//                                       const std::string &indent,
+//                                       std::index_sequence<Indexes...>) {
+//  // Getting the fields_pack should be a relatively light-weight operation. It
+//  // will copy a std::tuple of primitive types, pointers, and references; no
+//  // deep copies of anything will be made.
+//  auto fields_pack = flatbuff.fields_pack();
+//  std::ostringstream oss;
+//  auto add_field = [&](auto &&field_value, size_t index) {
+//    auto value_string = StringifyFlatbufferValue(field_value, indent);
+//    if (!value_string) { return; }
+//    oss << indent << FB::Traits::field_names[index] << " = " << *value_string
+//        << "\n";
+//  };
+//  // Prevents unused-var warning when object has no fields.
+//  (void)fields_pack;
+//  (void)add_field;
+//  // This line is where the compile-time iteration happens!
+//  (add_field(std::get<Indexes>(fields_pack), Indexes), ...);
+//  return oss.str();
+//}
+
+
+template<typename T>
+void StringifyField(T &&value, const char *name, const std::string &indent,
+                    std::string &text) {
+  if (auto value_string = StringifyFlatbufferValue(value, indent)) {
+    text += indent;
+    text += name;
+    text += " = ";
+    text += *value_string;
+    text += '\n';
+  }
+}
+
 template<typename FB, size_t... Indexes>
 std::string StringifyTableOrStructImpl(const FB &flatbuff,
                                        const std::string &indent,
@@ -70,20 +106,18 @@ std::string StringifyTableOrStructImpl(const FB &flatbuff,
   // Getting the fields_pack should be a relatively light-weight operation. It
   // will copy a std::tuple of primitive types, pointers, and references; no
   // deep copies of anything will be made.
-  auto fields_pack = flatbuff.fields_pack();
-  std::ostringstream oss;
-  auto add_field = [&](auto &&field_value, size_t index) {
-    auto value_string = StringifyFlatbufferValue(field_value, indent);
-    if (!value_string) { return; }
-    oss << indent << FB::Traits::field_names[index] << " = " << *value_string
-        << "\n";
-  };
-  // Prevents unused-var warning when object has no fields.
-  (void)fields_pack;
-  (void)add_field;
-  // This line is where the compile-time iteration happens!
-  (add_field(std::get<Indexes>(fields_pack), Indexes), ...);
-  return oss.str();
+  if constexpr (0 != sizeof...(Indexes)) {
+    std::string text;
+    // This line is where the compile-time iteration happens!
+    (StringifyField(flatbuff.get_field<Indexes>(),
+                    FB::Traits::field_names[Indexes], indent, text),
+     ...);
+    return text;
+  } else {
+    (void)flatbuff;
+    (void)indent;
+    return {};
+  }
 }
 
 template<typename FB>

@@ -514,6 +514,13 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(2) Test FLATBUFFERS_FINAL_CLASS {
       b()
     };
   }
+  template<size_t index>
+  std::tuple_element_t<index, FieldTypes>  get_field() const {
+    return std::get<index>(FieldTypes{
+      a(),
+      b()
+    });
+  }
 };
 FLATBUFFERS_STRUCT_END(Test, 4);
 
@@ -626,6 +633,17 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(8) Vec3 FLATBUFFERS_FINAL_CLASS {
       test3()
     };
   }
+  template<size_t index>
+  std::tuple_element_t<index, FieldTypes>  get_field() const {
+    return std::get<index>(FieldTypes{
+      x(),
+      y(),
+      z(),
+      test1(),
+      test2(),
+      test3()
+    });
+  }
 };
 FLATBUFFERS_STRUCT_END(Vec3, 32);
 
@@ -688,6 +706,13 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) Ability FLATBUFFERS_FINAL_CLASS {
       id(),
       distance()
     };
+  }
+  template<size_t index>
+  std::tuple_element_t<index, FieldTypes>  get_field() const {
+    return std::get<index>(FieldTypes{
+      id(),
+      distance()
+    });
   }
 };
 FLATBUFFERS_STRUCT_END(Ability, 8);
@@ -849,6 +874,12 @@ struct TestSimpleTableWithEnum FLATBUFFERS_FINAL_CLASS : private flatbuffers::Ta
       color()
     };
   }
+  template<size_t index>
+  std::tuple_element_t<index, FieldTypes>  get_field() const {
+    return std::get<index>(FieldTypes{
+      color()
+    });
+  }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<uint8_t>(verifier, VT_COLOR) &&
@@ -945,6 +976,14 @@ struct Stat FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
       val(),
       count()
     };
+  }
+  template<size_t index>
+  std::tuple_element_t<index, FieldTypes>  get_field() const {
+    return std::get<index>(FieldTypes{
+      id(),
+      val(),
+      count()
+    });
   }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
@@ -1056,6 +1095,12 @@ struct Referrable FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
     return {
       id()
     };
+  }
+  template<size_t index>
+  std::tuple_element_t<index, FieldTypes>  get_field() const {
+    return std::get<index>(FieldTypes{
+      id()
+    });
   }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
@@ -1648,6 +1693,60 @@ struct Monster FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
       signed_enum(),
       testrequirednestedflatbuffer()
     };
+  }
+  template<size_t index>
+  std::tuple_element_t<index, FieldTypes>  get_field() const {
+    return std::get<index>(FieldTypes{
+      pos(),
+      mana(),
+      hp(),
+      name(),
+      inventory(),
+      color(),
+      test_type(),
+      test(),
+      test4(),
+      testarrayofstring(),
+      testarrayoftables(),
+      enemy(),
+      testnestedflatbuffer(),
+      testempty(),
+      testbool(),
+      testhashs32_fnv1(),
+      testhashu32_fnv1(),
+      testhashs64_fnv1(),
+      testhashu64_fnv1(),
+      testhashs32_fnv1a(),
+      testhashu32_fnv1a(),
+      testhashs64_fnv1a(),
+      testhashu64_fnv1a(),
+      testarrayofbools(),
+      testf(),
+      testf2(),
+      testf3(),
+      testarrayofstring2(),
+      testarrayofsortedstruct(),
+      flex(),
+      test5(),
+      vector_of_longs(),
+      vector_of_doubles(),
+      parent_namespace_test(),
+      vector_of_referrables(),
+      single_weak_reference(),
+      vector_of_weak_references(),
+      vector_of_strong_referrables(),
+      co_owning_reference(),
+      vector_of_co_owning_references(),
+      non_owning_reference(),
+      vector_of_non_owning_references(),
+      any_unique_type(),
+      any_unique(),
+      any_ambiguous_type(),
+      any_ambiguous(),
+      vector_of_enums(),
+      signed_enum(),
+      testrequirednestedflatbuffer()
+    });
   }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
@@ -2351,6 +2450,23 @@ struct TypeAliases FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
       v8(),
       vf64()
     };
+  }
+  template<size_t index>
+  std::tuple_element_t<index, FieldTypes>  get_field() const {
+    return std::get<index>(FieldTypes{
+      i8(),
+      u8(),
+      i16(),
+      u16(),
+      i32(),
+      u32(),
+      i64(),
+      u64(),
+      f32(),
+      f64(),
+      v8(),
+      vf64()
+    });
   }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
