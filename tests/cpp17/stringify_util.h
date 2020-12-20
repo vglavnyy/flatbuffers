@@ -35,13 +35,13 @@ namespace cpp17 {
 template<class FBS, size_t... Indexes>
 std::tuple<std::tuple_element_t<Indexes, typename FBS::FieldTypes>...>
 FieldsPack(const FBS& fbs, std::index_sequence<Indexes...>) {
-    return { fbs.get_field<Indexes>()... };
+    return { fbs.template get_field<Indexes>()... };
 }
 
 template<class FBS>
 typename FBS::FieldTypes FieldsPack(const FBS& fbs)
 {
-    return FieldsPack(fbs, std::make_index_sequence<std::tuple_size_v<FBS::FieldTypes>>{});
+    return FieldsPack(fbs, std::make_index_sequence<std::tuple_size_v<typename FBS::FieldTypes>>{});
 }
 
 // User calls this; need to forward declare it since it is called recursively.
@@ -122,13 +122,17 @@ std::string StringifyTableOrStructImpl(const FB &flatbuff,
   if constexpr (0 != sizeof...(Indexes)) {
     std::string text;
     // This line is where the compile-time iteration happens!
-    //(StringifyField(flatbuff.get_field<Indexes>(),
-    //                FB::Traits::field_names[Indexes], indent, text),
-    // ...);
-    auto fields_pack = FieldsPack(flatbuff);
-    (StringifyField(std::get<Indexes>(fields_pack),
-                    FB::Traits::field_names[Indexes], indent, text),
-     ...);
+    if constexpr (true) {
+      // I prefer this code (get_field() should be free-standing method)
+      (StringifyField(flatbuff.template get_field<Indexes>(),
+                      FB::Traits::field_names[Indexes], indent, text),
+       ...);
+    } else {
+      auto fields_pack = FieldsPack(flatbuff);
+      (StringifyField(std::get<Indexes>(fields_pack),
+                      FB::Traits::field_names[Indexes], indent, text),
+       ...);
+    }
     return text;
   } else {
     (void)flatbuff;

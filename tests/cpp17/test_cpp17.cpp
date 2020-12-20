@@ -160,83 +160,86 @@ void StringifyAnyFlatbuffersTypeTest() {
 
   TEST_ASSERT(result.has_value());
   TEST_EQ_STR(expected.c_str(), result->c_str());
-  
-  TEST_EQ(monster->get_field<1>(), 1);
+
+  // These two lines generate an identical code (both gcc10 and clang-11).
+  // TEST_EQ(monster->get_field<1>(), 1);
+  // TEST_EQ(std::get<0>(cpp17::FieldsPack(*monster, std::index_sequence<1>{})), 1);
+
+  // This call creates a full copy of all fields on the stack and then read th only one.
   TEST_EQ(std::get<1>(cpp17::FieldsPack(*monster)), 1);
-  TEST_EQ(std::get<0>(cpp17::FieldsPack(*monster, std::index_sequence<1>{})), 1);
 }
 
 /*******************************************************************************
 ** Generic Create Function Test.
 *******************************************************************************/
-void CreateTableByTypeTest() {
-  flatbuffers::FlatBufferBuilder builder;
+// void CreateTableByTypeTest() {
+//   flatbuffers::FlatBufferBuilder builder;
 
-  // We will create an object of this type using only the type.
-  using type_to_create_t = cpp17::MyGame::Example::Stat;
+//   // We will create an object of this type using only the type.
+//   using type_to_create_t = cpp17::MyGame::Example::Stat;
 
-  [&builder] {
-    auto id_str = builder.CreateString("my_id");
-    auto table = type_to_create_t::Traits::Create(builder, id_str, 42, 7);
-    // Be sure that the correct return type was inferred.
-    static_assert(
-        std::is_same_v<decltype(table), flatbuffers::Offset<type_to_create_t>>);
-    builder.Finish(table);
-  }();
+//   [&builder] {
+//     auto id_str = builder.CreateString("my_id");
+//     auto table = type_to_create_t::Traits::Create(builder, id_str, 42, 7);
+//     // Be sure that the correct return type was inferred.
+//     static_assert(
+//         std::is_same_v<decltype(table), flatbuffers::Offset<type_to_create_t>>);
+//     builder.Finish(table);
+//   }();
 
-  // Access it.
-  auto stat =
-      flatbuffers::GetRoot<type_to_create_t>(builder.GetBufferPointer());
-  TEST_EQ_STR(stat->id()->c_str(), "my_id");
-  TEST_EQ(stat->val(), 42);
-  TEST_EQ(stat->count(), 7);
-}
+//   // Access it.
+//   auto stat =
+//       flatbuffers::GetRoot<type_to_create_t>(builder.GetBufferPointer());
+//   TEST_EQ_STR(stat->id()->c_str(), "my_id");
+//   TEST_EQ(stat->val(), 42);
+//   TEST_EQ(stat->count(), 7);
+// }
 
-void OptionalScalarsTest() {
-  static_assert(
-      std::is_same<flatbuffers::Optional<float>, std::optional<float>>::value);
-  static_assert(std::is_same<flatbuffers::nullopt_t, std::nullopt_t>::value);
+// void OptionalScalarsTest() {
+//   static_assert(
+//       std::is_same<flatbuffers::Optional<float>, std::optional<float>>::value);
+//   static_assert(std::is_same<flatbuffers::nullopt_t, std::nullopt_t>::value);
 
-  // test C++ nullable
-  flatbuffers::FlatBufferBuilder fbb;
-  FinishScalarStuffBuffer(fbb, cpp17::optional_scalars::CreateScalarStuff(
-                                   fbb, 1, static_cast<int8_t>(2)));
-  auto opts =
-      cpp17::optional_scalars::GetMutableScalarStuff(fbb.GetBufferPointer());
-  TEST_ASSERT(!opts->maybe_bool());
-  TEST_ASSERT(!opts->maybe_f32().has_value());
-  TEST_ASSERT(opts->maybe_i8().has_value());
-  TEST_EQ(opts->maybe_i8().value(), 2);
-  TEST_ASSERT(opts->mutate_maybe_i8(3));
-  TEST_ASSERT(opts->maybe_i8().has_value());
-  TEST_EQ(opts->maybe_i8().value(), 3);
-  TEST_ASSERT(!opts->mutate_maybe_i16(-10));
+//   // test C++ nullable
+//   flatbuffers::FlatBufferBuilder fbb;
+//   FinishScalarStuffBuffer(fbb, cpp17::optional_scalars::CreateScalarStuff(
+//                                    fbb, 1, static_cast<int8_t>(2)));
+//   auto opts =
+//       cpp17::optional_scalars::GetMutableScalarStuff(fbb.GetBufferPointer());
+//   TEST_ASSERT(!opts->maybe_bool());
+//   TEST_ASSERT(!opts->maybe_f32().has_value());
+//   TEST_ASSERT(opts->maybe_i8().has_value());
+//   TEST_EQ(opts->maybe_i8().value(), 2);
+//   TEST_ASSERT(opts->mutate_maybe_i8(3));
+//   TEST_ASSERT(opts->maybe_i8().has_value());
+//   TEST_EQ(opts->maybe_i8().value(), 3);
+//   TEST_ASSERT(!opts->mutate_maybe_i16(-10));
 
-  cpp17::optional_scalars::ScalarStuffT obj;
-  opts->UnPackTo(&obj);
-  TEST_ASSERT(!obj.maybe_bool);
-  TEST_ASSERT(!obj.maybe_f32.has_value());
-  TEST_ASSERT(obj.maybe_i8.has_value() && obj.maybe_i8.value() == 3);
-  TEST_ASSERT(obj.maybe_i8 && *obj.maybe_i8 == 3);
-  obj.maybe_i32 = -1;
+//   cpp17::optional_scalars::ScalarStuffT obj;
+//   opts->UnPackTo(&obj);
+//   TEST_ASSERT(!obj.maybe_bool);
+//   TEST_ASSERT(!obj.maybe_f32.has_value());
+//   TEST_ASSERT(obj.maybe_i8.has_value() && obj.maybe_i8.value() == 3);
+//   TEST_ASSERT(obj.maybe_i8 && *obj.maybe_i8 == 3);
+//   obj.maybe_i32 = -1;
 
-  fbb.Clear();
-  FinishScalarStuffBuffer(
-      fbb, cpp17::optional_scalars::ScalarStuff::Pack(fbb, &obj));
-  opts = cpp17::optional_scalars::GetMutableScalarStuff(fbb.GetBufferPointer());
-  TEST_ASSERT(opts->maybe_i8().has_value());
-  TEST_EQ(opts->maybe_i8().value(), 3);
-  TEST_ASSERT(opts->maybe_i32().has_value());
-  TEST_EQ(opts->maybe_i32().value(), -1);
+//   fbb.Clear();
+//   FinishScalarStuffBuffer(
+//       fbb, cpp17::optional_scalars::ScalarStuff::Pack(fbb, &obj));
+//   opts = cpp17::optional_scalars::GetMutableScalarStuff(fbb.GetBufferPointer());
+//   TEST_ASSERT(opts->maybe_i8().has_value());
+//   TEST_EQ(opts->maybe_i8().value(), 3);
+//   TEST_ASSERT(opts->maybe_i32().has_value());
+//   TEST_EQ(opts->maybe_i32().value(), -1);
 
-  TEST_EQ(std::optional<int32_t>(opts->maybe_i32()).value(), -1);
-  TEST_EQ(std::optional<int64_t>(opts->maybe_i32()).value(), -1);
-  TEST_ASSERT(opts->maybe_i32() == std::optional<int64_t>(-1));
-}
+//   TEST_EQ(std::optional<int32_t>(opts->maybe_i32()).value(), -1);
+//   TEST_EQ(std::optional<int64_t>(opts->maybe_i32()).value(), -1);
+//   TEST_ASSERT(opts->maybe_i32() == std::optional<int64_t>(-1));
+// }
 
 int FlatBufferCpp17Tests() {
-  CreateTableByTypeTest();
-  OptionalScalarsTest();
+  // CreateTableByTypeTest();
+  // OptionalScalarsTest();
   StringifyAnyFlatbuffersTypeTest();
   return 0;
 }
