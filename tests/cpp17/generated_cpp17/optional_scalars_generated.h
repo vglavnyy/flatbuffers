@@ -388,46 +388,6 @@ struct ScalarStuff FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
     flatbuffers::Optional<optional_scalars::OptionalByte>,
     optional_scalars::OptionalByte
     >;
-  FieldTypes fields_pack() const {
-    return {
-      just_i8(),
-      maybe_i8(),
-      default_i8(),
-      just_u8(),
-      maybe_u8(),
-      default_u8(),
-      just_i16(),
-      maybe_i16(),
-      default_i16(),
-      just_u16(),
-      maybe_u16(),
-      default_u16(),
-      just_i32(),
-      maybe_i32(),
-      default_i32(),
-      just_u32(),
-      maybe_u32(),
-      default_u32(),
-      just_i64(),
-      maybe_i64(),
-      default_i64(),
-      just_u64(),
-      maybe_u64(),
-      default_u64(),
-      just_f32(),
-      maybe_f32(),
-      default_f32(),
-      just_f64(),
-      maybe_f64(),
-      default_f64(),
-      just_bool(),
-      maybe_bool(),
-      default_bool(),
-      just_enum(),
-      maybe_enum(),
-      default_enum()
-    };
-  }
   template<size_t index>
   std::tuple_element_t<index, FieldTypes>  get_field() const {
     return std::get<index>(FieldTypes{

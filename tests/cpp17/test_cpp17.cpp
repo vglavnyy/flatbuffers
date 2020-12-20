@@ -160,6 +160,10 @@ void StringifyAnyFlatbuffersTypeTest() {
 
   TEST_ASSERT(result.has_value());
   TEST_EQ_STR(expected.c_str(), result->c_str());
+  
+  TEST_EQ(monster->get_field<1>(), 1);
+  TEST_EQ(std::get<1>(cpp17::FieldsPack(*monster)), 1);
+  TEST_EQ(std::get<0>(cpp17::FieldsPack(*monster, std::index_sequence<1>{})), 1);
 }
 
 /*******************************************************************************

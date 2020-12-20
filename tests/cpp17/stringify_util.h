@@ -31,6 +31,19 @@
 
 namespace cpp17 {
 
+// Optional helpers, they are not nessesary for stringify.
+template<class FBS, size_t... Indexes>
+std::tuple<std::tuple_element_t<Indexes, typename FBS::FieldTypes>...>
+FieldsPack(const FBS& fbs, std::index_sequence<Indexes...>) {
+    return { fbs.get_field<Indexes>()... };
+}
+
+template<class FBS>
+typename FBS::FieldTypes FieldsPack(const FBS& fbs)
+{
+    return FieldsPack(fbs, std::make_index_sequence<std::tuple_size_v<FBS::FieldTypes>>{});
+}
+
 // User calls this; need to forward declare it since it is called recursively.
 template<typename T>
 std::optional<std::string> StringifyFlatbufferValue(
@@ -109,7 +122,11 @@ std::string StringifyTableOrStructImpl(const FB &flatbuff,
   if constexpr (0 != sizeof...(Indexes)) {
     std::string text;
     // This line is where the compile-time iteration happens!
-    (StringifyField(flatbuff.get_field<Indexes>(),
+    //(StringifyField(flatbuff.get_field<Indexes>(),
+    //                FB::Traits::field_names[Indexes], indent, text),
+    // ...);
+    auto fields_pack = FieldsPack(flatbuff);
+    (StringifyField(std::get<Indexes>(fields_pack),
                     FB::Traits::field_names[Indexes], indent, text),
      ...);
     return text;

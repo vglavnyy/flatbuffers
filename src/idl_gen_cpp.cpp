@@ -2114,29 +2114,6 @@ class CppGenerator : public BaseGenerator {
   //   }
   //
   void GenFieldsPack(const StructDef &struct_def) {
-    code_ += "  FieldTypes fields_pack() const {";
-    code_ += "    return {\\";
-    if (struct_def.fields.vec.empty()) {
-      code_ += "};";
-      code_ += "  }";
-      return;
-    }
-    code_ += "";
-    // Generate the fields_pack elements.
-    for (auto it = struct_def.fields.vec.begin();
-         it != struct_def.fields.vec.end(); ++it) {
-      const auto &field = **it;
-      if (field.deprecated) {
-        // Deprecated fields won't be accessible.
-        continue;
-      }
-      code_.SetValue("FIELD_NAME", Name(field));
-      code_ += "      {{FIELD_NAME}}()\\";
-      if (it + 1 != struct_def.fields.vec.end()) { code_ += ","; }
-    }
-    code_ += "\n    };";
-    code_ += "  }";
-
     code_ += "  template<size_t index>";
     code_ += "  std::tuple_element_t<index, FieldTypes>  get_field() const {";
     code_ += "    return std::get<index>(FieldTypes{\\";

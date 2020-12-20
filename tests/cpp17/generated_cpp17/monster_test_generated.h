@@ -508,12 +508,6 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(2) Test FLATBUFFERS_FINAL_CLASS {
     int16_t,
     int8_t
     >;
-  FieldTypes fields_pack() const {
-    return {
-      a(),
-      b()
-    };
-  }
   template<size_t index>
   std::tuple_element_t<index, FieldTypes>  get_field() const {
     return std::get<index>(FieldTypes{
@@ -623,16 +617,6 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(8) Vec3 FLATBUFFERS_FINAL_CLASS {
     MyGame::Example::Color,
     const MyGame::Example::Test &
     >;
-  FieldTypes fields_pack() const {
-    return {
-      x(),
-      y(),
-      z(),
-      test1(),
-      test2(),
-      test3()
-    };
-  }
   template<size_t index>
   std::tuple_element_t<index, FieldTypes>  get_field() const {
     return std::get<index>(FieldTypes{
@@ -701,12 +685,6 @@ FLATBUFFERS_MANUALLY_ALIGNED_STRUCT(4) Ability FLATBUFFERS_FINAL_CLASS {
     uint32_t,
     uint32_t
     >;
-  FieldTypes fields_pack() const {
-    return {
-      id(),
-      distance()
-    };
-  }
   template<size_t index>
   std::tuple_element_t<index, FieldTypes>  get_field() const {
     return std::get<index>(FieldTypes{
@@ -741,8 +719,11 @@ struct InParentNamespace FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
     return InParentNamespaceTypeTable();
   }
   using FieldTypes = std::tuple<>;
-  FieldTypes fields_pack() const {
-    return {};
+  template<size_t index>
+  std::tuple_element_t<index, FieldTypes>  get_field() const {
+    return std::get<index>(FieldTypes{
+
+    });
   }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
@@ -798,8 +779,11 @@ struct Monster FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
     return MonsterTypeTable();
   }
   using FieldTypes = std::tuple<>;
-  FieldTypes fields_pack() const {
-    return {};
+  template<size_t index>
+  std::tuple_element_t<index, FieldTypes>  get_field() const {
+    return std::get<index>(FieldTypes{
+
+    });
   }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
@@ -869,11 +853,6 @@ struct TestSimpleTableWithEnum FLATBUFFERS_FINAL_CLASS : private flatbuffers::Ta
   using FieldTypes = std::tuple<
     MyGame::Example::Color
     >;
-  FieldTypes fields_pack() const {
-    return {
-      color()
-    };
-  }
   template<size_t index>
   std::tuple_element_t<index, FieldTypes>  get_field() const {
     return std::get<index>(FieldTypes{
@@ -970,13 +949,6 @@ struct Stat FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
     int64_t,
     uint16_t
     >;
-  FieldTypes fields_pack() const {
-    return {
-      id(),
-      val(),
-      count()
-    };
-  }
   template<size_t index>
   std::tuple_element_t<index, FieldTypes>  get_field() const {
     return std::get<index>(FieldTypes{
@@ -1091,11 +1063,6 @@ struct Referrable FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   using FieldTypes = std::tuple<
     uint64_t
     >;
-  FieldTypes fields_pack() const {
-    return {
-      id()
-    };
-  }
   template<size_t index>
   std::tuple_element_t<index, FieldTypes>  get_field() const {
     return std::get<index>(FieldTypes{
@@ -1641,59 +1608,6 @@ struct Monster FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
     MyGame::Example::Race,
     const flatbuffers::Vector<uint8_t> *
     >;
-  FieldTypes fields_pack() const {
-    return {
-      pos(),
-      mana(),
-      hp(),
-      name(),
-      inventory(),
-      color(),
-      test_type(),
-      test(),
-      test4(),
-      testarrayofstring(),
-      testarrayoftables(),
-      enemy(),
-      testnestedflatbuffer(),
-      testempty(),
-      testbool(),
-      testhashs32_fnv1(),
-      testhashu32_fnv1(),
-      testhashs64_fnv1(),
-      testhashu64_fnv1(),
-      testhashs32_fnv1a(),
-      testhashu32_fnv1a(),
-      testhashs64_fnv1a(),
-      testhashu64_fnv1a(),
-      testarrayofbools(),
-      testf(),
-      testf2(),
-      testf3(),
-      testarrayofstring2(),
-      testarrayofsortedstruct(),
-      flex(),
-      test5(),
-      vector_of_longs(),
-      vector_of_doubles(),
-      parent_namespace_test(),
-      vector_of_referrables(),
-      single_weak_reference(),
-      vector_of_weak_references(),
-      vector_of_strong_referrables(),
-      co_owning_reference(),
-      vector_of_co_owning_references(),
-      non_owning_reference(),
-      vector_of_non_owning_references(),
-      any_unique_type(),
-      any_unique(),
-      any_ambiguous_type(),
-      any_ambiguous(),
-      vector_of_enums(),
-      signed_enum(),
-      testrequirednestedflatbuffer()
-    };
-  }
   template<size_t index>
   std::tuple_element_t<index, FieldTypes>  get_field() const {
     return std::get<index>(FieldTypes{
@@ -2435,22 +2349,6 @@ struct TypeAliases FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
     const flatbuffers::Vector<int8_t> *,
     const flatbuffers::Vector<double> *
     >;
-  FieldTypes fields_pack() const {
-    return {
-      i8(),
-      u8(),
-      i16(),
-      u16(),
-      i32(),
-      u32(),
-      i64(),
-      u64(),
-      f32(),
-      f64(),
-      v8(),
-      vf64()
-    };
-  }
   template<size_t index>
   std::tuple_element_t<index, FieldTypes>  get_field() const {
     return std::get<index>(FieldTypes{
