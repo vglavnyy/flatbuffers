@@ -3853,28 +3853,84 @@ int FlatBufferTests() {
   return 0;
 }
 
+// Special versions for floats/doubles.
+template<typename T> std::string FloatToStringUlpRounded(T t, int ulp) {
+  static_assert(std::is_floating_point<T>::value, "expected float or double");
+  // Expects that t is finit value (not Inf or Nan)!
+
+  // https://en.cppreference.com/w/cpp/types/numeric_limits/epsilon
+  // the machine epsilon has to be scaled to the magnitude of the values used
+  // and multiplied by the desired precision in ULPs (units in the last place)
+  auto v = std::fabs(t);  
+  auto ulp_precision = std::numeric_limits<T>::epsilon();
+  ulp_precision *= (v > std::numeric_limits<T>::min())
+                       ? (v * (ulp >= 1 ? ulp : 1))
+                       : static_cast<T>(45); // 45 for float, 309 for double
+  int exp2;
+  std::frexp(ulp_precision, &exp2);
+  int precision = ((exp2 < 0 ? -exp2 : 1)*10 + 33 - 1) / 33; // ceil(exp2 / log2(10))
+  
+  std::stringstream ss;
+  ss << std::fixed;
+  ss << std::setprecision(precision);
+  ss << t;
+  auto s = ss.str();
+  // Sadly, std::fixed turns "1" into "1.00000", so here we undo that.
+  auto p = s.find_last_not_of('0');
+  if (p != std::string::npos) {
+    // Strip trailing zeroes. If it is a whole number, keep one zero.
+    s.resize(p + (s[p] == '.' ? 2 : 1));
+  }
+  return s;
+}
+
+template<class T>
+int get_ulp_based_precision(T x, int ulp)
+{
+}
+
+template<typename T>
+void check_ulp(const char* number, T x, int ulp) {
+  auto texted = FloatToStringUlpRounded(x, ulp);
+  TEST_OUTPUT_LINE("%s, %s, %d", number, texted.c_str(), ulp);
+}
+
 int main(int /*argc*/, const char * /*argv*/[]) {
   InitTestEngine();
 
-  std::string req_locale;
-  if (flatbuffers::ReadEnvironmentVariable("FLATBUFFERS_TEST_LOCALE",
-                                           &req_locale)) {
-    TEST_OUTPUT_LINE("The environment variable FLATBUFFERS_TEST_LOCALE=%s",
-                     req_locale.c_str());
-    req_locale = flatbuffers::RemoveStringQuotes(req_locale);
-    std::string the_locale;
-    TEST_ASSERT_FUNC(
-        flatbuffers::SetGlobalTestLocale(req_locale.c_str(), &the_locale));
-    TEST_OUTPUT_LINE("The global C-locale changed: %s", the_locale.c_str());
-  }
+  check_ulp("0.125f", 0.125f, 1);
+  check_ulp("0.50781f", 0.50781f, 1);
+  check_ulp("0.507812f", 0.507812f, 1);
+  check_ulp("0.5078125f", 0.5078125f, 1);
+  check_ulp("5.078125f", 5.078125f, 1);
+  check_ulp("507.8125f", 507.8125f, 1);
+  check_ulp("2.718f", 2.718f, 1);
+  check_ulp("3.14159f", 3.14159f, 1);
+  check_ulp("3.1415926f", 3.1415926f, 1); // last digit is ulp digit
+  check_ulp(".314159f", .314159f, 1);
+  check_ulp(".00314159f", .00314159f, 1);
+  check_ulp(".0000314159f", .0000314159f, 1);
+  check_ulp(".00000000000000314159f", .00000000000000314159f, 1);
 
-  FlatBufferTests();
-  FlatBufferBuilderTest();
+  //std::string req_locale;
+  //if (flatbuffers::ReadEnvironmentVariable("FLATBUFFERS_TEST_LOCALE",
+  //                                         &req_locale)) {
+  //  TEST_OUTPUT_LINE("The environment variable FLATBUFFERS_TEST_LOCALE=%s",
+  //                   req_locale.c_str());
+  //  req_locale = flatbuffers::RemoveStringQuotes(req_locale);
+  //  std::string the_locale;
+  //  TEST_ASSERT_FUNC(
+  //      flatbuffers::SetGlobalTestLocale(req_locale.c_str(), &the_locale));
+  //  TEST_OUTPUT_LINE("The global C-locale changed: %s", the_locale.c_str());
+  //}
 
-  if (!testing_fails) {
-    TEST_OUTPUT_LINE("ALL TESTS PASSED");
-  } else {
-    TEST_OUTPUT_LINE("%d FAILED TESTS", testing_fails);
-  }
+  //FlatBufferTests();
+  //FlatBufferBuilderTest();
+
+  //if (!testing_fails) {
+  //  TEST_OUTPUT_LINE("ALL TESTS PASSED");
+  //} else {
+  //  TEST_OUTPUT_LINE("%d FAILED TESTS", testing_fails);
+  //}
   return CloseTestEngine();
 }
